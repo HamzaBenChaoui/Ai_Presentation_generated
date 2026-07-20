@@ -67,3 +67,5 @@ src/
 This frontend is paired with the `slide-ai-backend` repository
 (FastAPI + Supabase). The backend is the source of truth for identity and
 AI generation.
+
+- **Backend (FastAPI + Supabase):** https://github.com/zakaria0n/slide-ai-backend
