@@ -305,3 +305,24 @@ export const templatesApi = {
     return request<{ template: TemplateInfo }>("GET", `/templates/suggest?q=${encodeURIComponent(q)}`);
   },
 };
+
+export interface VersionInfo {
+  id: string;
+  presentation_id: string;
+  version_note: string | null;
+  slide_count: number;
+  created_at: string;
+  spec: PresentationSpec | null;
+}
+
+export const versionsApi = {
+  list(presentationId: string) {
+    return request<{ versions: VersionInfo[]; total: number }>("GET", `/presentations/${presentationId}/versions`);
+  },
+  get(presentationId: string, versionId: string) {
+    return request<VersionInfo>("GET", `/presentations/${presentationId}/versions/${versionId}`);
+  },
+  restore(presentationId: string, versionId: string) {
+    return request<PresentationSpec>("POST", `/presentations/${presentationId}/versions/${versionId}/restore`);
+  },
+};
