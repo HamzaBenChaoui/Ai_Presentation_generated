@@ -368,3 +368,51 @@ export const publicSharesApi = {
     return request<SharedPresentation>("GET", `/shared/${token}${qs}`);
   },
 };
+
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface WorkspaceMemberInfo {
+  id: string;
+  user_id: string;
+  role: string;
+  created_at: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  actor_id: string;
+  action: string;
+  target: string | null;
+  created_at: string;
+}
+
+export const workspacesApi = {
+  list() {
+    return request<{ workspaces: WorkspaceInfo[] }>("GET", "/workspaces");
+  },
+  create(name: string) {
+    return request<WorkspaceInfo>("POST", "/workspaces", { name });
+  },
+  members(workspaceId: string) {
+    return request<{ members: WorkspaceMemberInfo[] }>("GET", `/workspaces/${workspaceId}/members`);
+  },
+  addMember(workspaceId: string, userId: string, role: string) {
+    return request<WorkspaceMemberInfo>("POST", `/workspaces/${workspaceId}/members`, { user_id: userId, role });
+  },
+  changeRole(workspaceId: string, userId: string, role: string) {
+    return request<WorkspaceMemberInfo>("PATCH", `/workspaces/${workspaceId}/members/${userId}`, { role });
+  },
+  removeMember(workspaceId: string, userId: string) {
+    return request<void>("DELETE", `/workspaces/${workspaceId}/members/${userId}`);
+  },
+  addPresentation(workspaceId: string, presentationId: string) {
+    return request<{ status: string }>("POST", `/workspaces/${workspaceId}/presentations`, { presentation_id: presentationId });
+  },
+  audit(workspaceId: string) {
+    return request<{ entries: AuditEntry[] }>("GET", `/workspaces/${workspaceId}/audit`);
+  },
+};
