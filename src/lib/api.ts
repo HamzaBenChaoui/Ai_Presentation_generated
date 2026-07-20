@@ -9,7 +9,7 @@
 
 export const API_BASE = "/api/v1";
 
-import type { Presentation, PresentationList, FileAsset, FileList, Slide } from "./../types";
+import type { Presentation, PresentationList, FileAsset, FileList, Slide, PresentationSpec } from "./../types";
 
 export interface User {
   id: string;
@@ -165,6 +165,12 @@ export const generationApi = {
   },
   slides(id: string) {
     return request<Slide[]>("GET", `/presentations/${id}/slides`);
+  },
+};
+
+export const specApi = {
+  get(id: string) {
+    return request<PresentationSpec>("GET", `/presentations/${id}/spec`);
   },
 };
 
