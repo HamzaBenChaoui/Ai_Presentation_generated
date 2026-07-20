@@ -1,73 +1,69 @@
-# React + TypeScript + Vite
+# Slide AI — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The web frontend for **Slide AI**, an AI-powered presentation generator.
+Built with React 19, TypeScript, and Vite.
 
-Currently, two official plugins are available:
+The UI is a marketing/landing experience (hero, generator card, recent
+presentations, features strip) plus a real authentication layer
+(Sign In / Sign Up / Sign Out) wired to the Slide AI backend.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Tech stack
 
-## React Compiler
+- **React 19** + **TypeScript**
+- **Vite 7** dev server with HMR
+- Theme + Auth React Contexts (`src/context/`)
+- Typed fetch client (`src/lib/api.ts`) talking to the backend's `/api/v1`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Getting started
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The dev server starts on `http://localhost:5173` (or the next free port).
+It proxies `/api/**` to the running backend on `http://localhost:8000`
+(see `vite.config.ts`), so no absolute URLs or CORS setup are needed locally.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+To run the full app you also need the backend running:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# in the slide-ai-backend repo
+uvicorn app.main:app --port 8000
 ```
+
+## Available scripts
+
+| Script           | Description                          |
+| ---------------- | ------------------------------------ |
+| `npm run dev`    | Start the Vite dev server            |
+| `npm run build`  | Type-check (`tsc -b`) and build      |
+| `npm run preview`| Preview the production build         |
+| `npm run lint`   | Run ESLint                           |
+
+## Project structure
+
+```
+src/
+  components/        UI components (Navbar, AuthModal, HeroSection, …)
+  context/           React contexts (ThemeContext, AuthContext)
+  lib/api.ts         Typed backend API client
+  App.tsx            App composition root
+  main.tsx           Entry point (wraps app in providers)
+```
+
+## Authentication
+
+- `AuthContext` (`src/context/AuthContext.tsx`) holds the current user and
+  access token, persisted in `localStorage` so a refresh keeps the session.
+  On mount it validates any stored token against `GET /api/v1/auth/me`.
+- `AuthModal` (`src/components/AuthModal.tsx`) provides the Sign In / Sign Up
+  form and connects to the backend through `AuthContext`.
+- `Navbar` shows real auth state: **Sign in** / **Get started free** when
+  signed out, and the user's name + **Sign out** when signed in.
+
+## Backend
+
+This frontend is paired with the `slide-ai-backend` repository
+(FastAPI + Supabase). The backend is the source of truth for identity and
+AI generation.
