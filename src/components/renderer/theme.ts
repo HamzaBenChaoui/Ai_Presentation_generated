@@ -3,6 +3,10 @@
 // theme later is a one-line change. All values are CSS strings so layouts
 // stay framework-agnostic.
 
+// Spec element types are defined in the shared types module but the renderer
+// components import them from this module for a single source of truth.
+export type { SpecElement, SlideSpec } from '../../types'
+
 export interface RenderTokens {
   bg: string
   surface: string
@@ -10,6 +14,7 @@ export interface RenderTokens {
   border: string
   text: string
   textMuted: string
+  textDim: string
   accent: string
   accent2: string
   accent3: string
@@ -26,6 +31,7 @@ export const defaultTokens: RenderTokens = {
   border: 'rgba(255,255,255,0.12)',
   text: '#f4f4ff',
   textMuted: '#a0a0c0',
+  textDim: '#6b6b8a',
   accent: '#7c6aff',
   accent2: '#ff6ac1',
   accent3: '#37e0c8',
@@ -42,7 +48,7 @@ export const layoutGradient: Record<string, string> = {
   thank_you: 'linear-gradient(135deg, #7c6aff 0%, #ff6ac1 100%)',
 }
 
-export function tokenFor(themeName?: string | null): RenderTokens {
+export function tokenFor(_themeName?: string | null): RenderTokens {
   // Phase 11 will map theme names to full token sets. Until then every
   // named theme reuses the default palette so the renderer never breaks.
   return defaultTokens

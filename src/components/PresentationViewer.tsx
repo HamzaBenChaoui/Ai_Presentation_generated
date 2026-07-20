@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useTheme } from '../context/ThemeContext'
 import { specApi, ApiClientError } from '../lib/api'
 import type { Presentation, PresentationSpec } from '../types'
@@ -18,9 +19,13 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
 
   useEffect(() => {
     if (!presentation) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIndex(0)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpec(null)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     specApi
       .get(presentation.id)
@@ -31,12 +36,15 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
       .finally(() => setLoading(false))
   }, [presentation])
 
-  // Keyboard navigation (Phase 10 will also bind these in fullscreen).
+  // Keyboard navigation. Phase 10 will extend this for fullscreen mode.
   useEffect(() => {
     if (!presentation) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') setIndex((i) => Math.min(i + 1, Math.max(0, (spec?.slides.length || 1) - 1)))
+      if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault()
+        setIndex((i) => Math.min(i + 1, Math.max(0, (spec?.slides.length || 1) - 1)))
+      }
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') setIndex((i) => Math.max(i - 1, 0))
     }
     window.addEventListener('keydown', onKey)
@@ -114,7 +122,9 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
             <div style={{ color: colors.textMuted, fontSize: '14px' }}>No content.</div>
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <SlideStage spec={spec} index={index} />
+              <AnimatePresence mode="wait">
+                <SlideStage key={index} spec={spec} index={index} />
+              </AnimatePresence>
             </div>
           )}
         </div>
@@ -161,8 +171,15 @@ function SlideStage({ spec, index }: { spec: PresentationSpec; index: number }) 
   const slide = spec.slides[index]
   if (!slide) return null
   return (
-    <div style={{ width: '100%', maxWidth: '960px' }}>
+    <motion.div
+      key={index}
+      initial={{ opacity: 0, x: 40 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -40 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      style={{ width: '100%', maxWidth: '960px' }}
+    >
       <PresentationRenderer spec={{ meta: spec.meta, slides: [slide] }} />
-    </div>
+    </motion.div>
   )
 }

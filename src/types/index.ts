@@ -119,6 +119,7 @@ export interface SpecElement {
   caption?: string | null
   language?: string
   code?: string
+  author?: string
   headers?: string[]
   rows?: any[][]
   kind?: string

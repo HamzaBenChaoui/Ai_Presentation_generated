@@ -1,12 +1,25 @@
-import type { CSSProperties } from 'react'
+import { useContext, type CSSProperties } from 'react'
 import type { SlideSpec, SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
-import ElementRenderer from './ElementRenderer'
+import AnimatedElement from './AnimatedElement'
+import { SlideActiveContext } from './slideContext'
+
+const useSlideActive = () => useContext(SlideActiveContext)
+
+// Wraps an element with its entrance animation. The slide's active state
+// (from SlideActiveContext) gates whether the animation plays.
+function El({ el, index, tokens }: { el: SpecElement; index: number; tokens?: RenderTokens }) {
+  const active = useSlideActive()
+  return <AnimatedElement el={el} tokens={tokens} index={index} active={active} />
+}
 
 export interface LayoutProps {
   slide: SlideSpec
   tokens?: RenderTokens
   index?: number
+  // When false, element entrance animations stay hidden. Used by fullscreen
+  // mode to animate only the visible slide.
+  active?: boolean
 }
 
 // --- helpers ---------------------------------------------------------------
@@ -19,7 +32,7 @@ function splitElements(slide: SlideSpec) {
   return byType
 }
 
-function stack(children: JSX.Element[], gap = '20px'): CSSProperties {
+function stack(gap = '20px'): CSSProperties {
   return { display: 'flex', flexDirection: 'column', gap, width: '100%' }
 }
 
@@ -37,10 +50,10 @@ function card(tokens: RenderTokens): CSSProperties {
 export function Hero({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([...((e.title || []) as any), ...((e.subtitle || []) as any)]), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
-      {(e.paragraph || []).map((el, i) => <ElementRenderer key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
+    <div style={{ ...stack(), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+      {(e.paragraph || []).map((el, i) => <El key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
     </div>
   )
 }
@@ -48,9 +61,9 @@ export function Hero({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Title({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([...((e.title || []) as any), ...((e.subtitle || []) as any)]), justifyContent: 'center', height: '100%' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+    <div style={{ ...stack(), justifyContent: 'center', height: '100%' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
     </div>
   )
 }
@@ -59,10 +72,10 @@ export function Agenda({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const bullets = e.bullets?.[0]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {bullets && <ElementRenderer el={bullets} tokens={tokens} index={1} />}
-      {(e.paragraph || []).map((el, i) => <ElementRenderer key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {bullets && <El el={bullets} tokens={tokens} index={1} />}
+      {(e.paragraph || []).map((el, i) => <El key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
     </div>
   )
 }
@@ -70,10 +83,10 @@ export function Agenda({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Section({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([]), justifyContent: 'center', alignItems: 'flex-start', height: '100%' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
-      {(e.paragraph || []).map((el, i) => <ElementRenderer key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
+    <div style={{ ...stack(), justifyContent: 'center', alignItems: 'flex-start', height: '100%' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+      {(e.paragraph || []).map((el, i) => <El key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
     </div>
   )
 }
@@ -81,9 +94,9 @@ export function Section({ slide, tokens = defaultTokens }: LayoutProps) {
 export function BulletsLayout({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {e.bullets?.map((el, i) => <ElementRenderer key={`b${i}`} el={el} tokens={tokens} index={i + 1} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {e.bullets?.map((el, i) => <El key={`b${i}`} el={el} tokens={tokens} index={i + 1} />)}
     </div>
   )
 }
@@ -92,8 +105,8 @@ export function Timeline({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.timeline?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0', marginTop: '10px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ display: 'flex', gap: '18px', alignItems: 'flex-start' }}>
@@ -118,8 +131,8 @@ export function Comparison({ slide, tokens = defaultTokens }: LayoutProps) {
   const left = cmp?.left || {}
   const right = cmp?.right || {}
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginTop: '8px' }}>
         {[left, right].map((col, ci) => (
           <div key={ci} style={{ ...card(tokens), borderColor: ci === 1 ? tokens.accent2 : tokens.border }}>
@@ -138,8 +151,8 @@ export function Cards({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '8px' }}>
         {items.map((it, i) => (
           <div key={i} style={card(tokens)}>
@@ -156,8 +169,8 @@ export function Statistics({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.statistics?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginTop: '8px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), textAlign: 'center' }}>
@@ -174,8 +187,8 @@ export function Pricing({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), borderColor: it.highlight ? tokens.accent : tokens.border, position: 'relative' }}>
@@ -195,13 +208,13 @@ export function Pricing({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Gallery({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || e.image ? [] : []) as any[]
-  const imgs = slide.elements.filter((x) => x.type === 'image')
+  const imgs = slide.elements.filter((x: SpecElement) => x.type === 'image')
   const cells = items.length ? items : imgs
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
-        {cells.map((it, i) => (
+        {cells.map((it: any, i: number) => (
           <div key={i} style={{ ...card(tokens), minHeight: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.textMuted }}>
             {it.src ? <img src={it.src} alt={it.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: tokens.radius }} /> : (it.body || it.alt || '🖼')}
           </div>
@@ -215,8 +228,8 @@ export function Process({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.timeline?.[0]?.items || e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '8px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), flex: '1 1 160px', minWidth: '160px' }}>
@@ -234,8 +247,8 @@ export function Flow({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.timeline?.[0]?.items || e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
         {items.map((it, i) => (
           <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
@@ -252,8 +265,8 @@ export function Roadmap({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.timeline?.[0]?.items || e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ position: 'relative', paddingLeft: '20px', marginTop: '8px' }}>
         <div style={{ position: 'absolute', left: '6px', top: 0, bottom: 0, width: '2px', background: `linear-gradient(${tokens.accent}, ${tokens.accent2})` }} />
         {items.map((it, i) => (
@@ -272,8 +285,8 @@ export function Team({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginTop: '8px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), textAlign: 'center' }}>
@@ -290,8 +303,8 @@ export function Team({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Quote({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([]), justifyContent: 'center', alignItems: 'center', textAlign: 'center', height: '100%' }}>
-      {(e.quote || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={{ ...stack(), justifyContent: 'center', alignItems: 'center', textAlign: 'center', height: '100%' }}>
+      {(e.quote || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
     </div>
   )
 }
@@ -302,8 +315,8 @@ export function SWOT({ slide, tokens = defaultTokens }: LayoutProps) {
   const labels = ['Strengths', 'Weaknesses', 'Opportunities', 'Threats']
   const colors = [tokens.accent3, '#ff6b81', tokens.accent, tokens.accent2]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), borderTop: `3px solid ${colors[i % 4]}` }}>
@@ -319,9 +332,9 @@ export function SWOT({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Table({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {e.table?.map((el, i) => <ElementRenderer key={`t${i}`} el={el} tokens={tokens} index={i + 1} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {e.table?.map((el, i) => <El key={`t${i}`} el={el} tokens={tokens} index={i + 1} />)}
     </div>
   )
 }
@@ -332,8 +345,8 @@ export function Chart({ slide, tokens = defaultTokens }: LayoutProps) {
   const items = stats?.items || []
   const max = Math.max(...items.map((x: any) => parseFloat(String(x.value).replace(/[^0-9.]/g, '')) || 1), 1)
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '14px', height: '200px', padding: '20px', ...card(tokens) }}>
         {items.map((it: any, i: number) => {
           const v = parseFloat(String(it.value).replace(/[^0-9.]/g, '')) || 0
@@ -357,10 +370,10 @@ export function ImageLeft({ slide, tokens = defaultTokens }: LayoutProps) {
       <div style={{ ...card(tokens), minHeight: '60%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.textMuted, overflow: 'hidden' }}>
         {img?.src ? <img src={img.src} alt={img.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (img?.alt || '🖼')}
       </div>
-      <div style={stack([])}>
-        {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-        {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
-        {e.bullets?.map((el, i) => <ElementRenderer key={`b${i}`} el={el} tokens={tokens} index={i + 2} />)}
+      <div style={stack()}>
+        {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+        {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+        {e.bullets?.map((el, i) => <El key={`b${i}`} el={el} tokens={tokens} index={i + 2} />)}
       </div>
     </div>
   )
@@ -371,10 +384,10 @@ export function ImageRight({ slide, tokens = defaultTokens }: LayoutProps) {
   const img = e.image?.[0]
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', alignItems: 'center', height: '100%' }}>
-      <div style={stack([])}>
-        {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-        {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
-        {e.bullets?.map((el, i) => <ElementRenderer key={`b${i}`} el={el} tokens={tokens} index={i + 2} />)}
+      <div style={stack()}>
+        {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+        {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+        {e.bullets?.map((el, i) => <El key={`b${i}`} el={el} tokens={tokens} index={i + 2} />)}
       </div>
       <div style={{ ...card(tokens), minHeight: '60%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.textMuted, overflow: 'hidden' }}>
         {img?.src ? <img src={img.src} alt={img.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (img?.alt || '🖼')}
@@ -386,9 +399,9 @@ export function ImageRight({ slide, tokens = defaultTokens }: LayoutProps) {
 export function CTA({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([]), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%', gap: '24px' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+    <div style={{ ...stack(), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%', gap: '24px' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
       <button style={{ padding: '14px 34px', borderRadius: '40px', border: 'none', background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`, color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer', boxShadow: `0 10px 30px ${tokens.accent}66` }}>
         {(e.paragraph?.[0]?.text) || 'Get started'}
       </button>
@@ -399,10 +412,10 @@ export function CTA({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Conclusion({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([]), justifyContent: 'center', height: '100%' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.bullets || []).map((el, i) => <ElementRenderer key={`b${i}`} el={el} tokens={tokens} index={i + 1} />)}
-      {(e.paragraph || []).map((el, i) => <ElementRenderer key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
+    <div style={{ ...stack(), justifyContent: 'center', height: '100%' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.bullets || []).map((el, i) => <El key={`b${i}`} el={el} tokens={tokens} index={i + 1} />)}
+      {(e.paragraph || []).map((el, i) => <El key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
     </div>
   )
 }
@@ -410,9 +423,9 @@ export function Conclusion({ slide, tokens = defaultTokens }: LayoutProps) {
 export function ThankYou({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([]), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+    <div style={{ ...stack(), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
     </div>
   )
 }
@@ -423,8 +436,8 @@ export function Diagram({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const diag = e.diagram?.[0] as any
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ ...card(tokens), textAlign: 'center', minHeight: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
         <div style={{ fontSize: '48px' }}>🧩</div>
         <div style={{ color: tokens.textMuted }}>{diag?.label || 'Diagram placeholder'}</div>
@@ -437,9 +450,9 @@ export function Diagram({ slide, tokens = defaultTokens }: LayoutProps) {
 export function CodeLayout({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {e.code?.map((el, i) => <ElementRenderer key={`c${i}`} el={el} tokens={tokens} index={i + 1} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {e.code?.map((el, i) => <El key={`c${i}`} el={el} tokens={tokens} index={i + 1} />)}
     </div>
   )
 }
@@ -448,8 +461,8 @@ export function IconGrid({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || e.icon?.map((x) => ({ title: x.label, body: x.name })) || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), textAlign: 'center' }}>
@@ -467,8 +480,8 @@ export function Features({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens), borderLeft: `4px solid ${tokens.accent}` }}>
@@ -485,8 +498,8 @@ export function NumberedList({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || e.bullets?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {items.map((it: any, i: number) => (
           <div key={i} style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
@@ -503,8 +516,8 @@ export function BigStat({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const stat = e.statistics?.[0]?.items?.[0] as any
   return (
-    <div style={{ ...stack([]), alignItems: 'center', justifyContent: 'center', textAlign: 'center', height: '100%' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={{ ...stack(), alignItems: 'center', justifyContent: 'center', textAlign: 'center', height: '100%' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       {stat && (
         <div>
           <div style={{ fontFamily: tokens.fontHeading, fontWeight: 800, fontSize: 'clamp(60px, 12vw, 140px)', background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1 }}>{stat.value}</div>
@@ -530,8 +543,8 @@ export function TwoColumn({ slide, tokens = defaultTokens }: LayoutProps) {
     </div>
   )
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         {col(items.slice(0, half))}
         {col(items.slice(half))}
@@ -544,8 +557,8 @@ export function Testimonials({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const items = (e.cards?.[0]?.items || []) as any[]
   return (
-    <div style={stack([])}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
+    <div style={stack()}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
         {items.map((it, i) => (
           <div key={i} style={{ ...card(tokens) }}>
@@ -563,10 +576,10 @@ export function Testimonials({ slide, tokens = defaultTokens }: LayoutProps) {
 export function Cover({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   return (
-    <div style={{ ...stack([]), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%', gap: '18px' }}>
-      {(e.title || []).map((el, i) => <ElementRenderer key={i} el={el} tokens={tokens} index={i} />)}
-      {(e.subtitle || []).map((el, i) => <ElementRenderer key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
-      {(e.paragraph || []).map((el, i) => <ElementRenderer key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
+    <div style={{ ...stack(), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%', gap: '18px' }}>
+      {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
+      {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
+      {(e.paragraph || []).map((el, i) => <El key={`p${i}`} el={el} tokens={tokens} index={i + 2} />)}
     </div>
   )
 }

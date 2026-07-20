@@ -54,7 +54,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     case 'bullets':
       return (
         <ul key={key} {...{ [anim]: '' } as any} style={{ ...style, listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {(el.items || []).map((b, i) => (
+          {(el.items || []).map((b: any, i: number) => (
             <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', fontSize: 'clamp(15px, 1.6vw, 20px)', color: tokens.text }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: tokens.accent, marginTop: '10px', flexShrink: 0, boxShadow: `0 0 12px ${tokens.accent}` }} />
               <span>{b}</span>
@@ -95,16 +95,16 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
             {headers.length > 0 && (
               <thead>
                 <tr>
-                  {headers.map((h, i) => (
+                  {headers.map((h: string, i: number) => (
                     <th key={i} style={{ textAlign: 'left', padding: '12px 14px', borderBottom: `2px solid ${tokens.border}`, color: tokens.accent }}>{h}</th>
                   ))}
                 </tr>
               </thead>
             )}
             <tbody>
-              {rows.map((r, ri) => (
+              {rows.map((r: any[], ri: number) => (
                 <tr key={ri}>
-                  {r.map((c, ci) => (
+                  {r.map((c: any, ci: number) => (
                     <td key={ci} style={{ padding: '12px 14px', borderBottom: `1px solid ${tokens.border}`, color: tokens.text }}>{c}</td>
                   ))}
                 </tr>
