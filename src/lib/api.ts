@@ -172,6 +172,9 @@ export const specApi = {
   get(id: string) {
     return request<PresentationSpec>("GET", `/presentations/${id}/spec`);
   },
+  update(id: string, spec: PresentationSpec) {
+    return request<PresentationSpec>("PUT", `/presentations/${id}/spec`, spec);
+  },
 };
 
 export type ExportFormat = "html" | "pdf" | "pptx";

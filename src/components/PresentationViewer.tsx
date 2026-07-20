@@ -7,6 +7,14 @@ import PresentationRenderer from './renderer/PresentationRenderer'
 import FullscreenPlayer from './renderer/FullscreenPlayer'
 import { DeckThemeProvider } from './renderer/DeckThemeContext'
 import ThemeSwitcher from './renderer/ThemeSwitcher'
+import { EditorProvider, useEditor } from './editor/EditorContext'
+
+// Reads live spec from editor context. Only rendered inside EditorProvider.
+function EditorSlideStage({ index }: { index: number }) {
+  const { spec } = useEditor()
+  if (!spec) return null
+  return <SlideStage spec={spec} index={index} />
+}
 import type { ThemeName } from './renderer/theme'
 import { exportApi, type ExportFormat } from '../lib/api'
 
@@ -22,6 +30,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
   const [presenting, setPresenting] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState<ExportFormat | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -75,6 +84,14 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   }
 
   if (!presentation) return null
+
+  // When editing is on and spec is loaded, wrap the stage in EditorProvider
+  // so the editor manages spec state (auto-save, undo/redo, etc.)
+  const EditorStage = editing && spec ? (
+    <EditorProvider presentationId={presentation.id}>
+      <EditorSlideStage index={index} />
+    </EditorProvider>
+  ) : null
 
   const total = spec?.slides.length || 0
 
@@ -130,6 +147,14 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {spec && <ThemeSwitcher />}
+            <button
+              onClick={() => setEditing((e) => !e)}
+              disabled={!spec}
+              title="Toggle editor"
+              style={{ padding: '8px 14px', borderRadius: '10px', border: `1px solid ${editing ? colors.accent : colors.border}`, background: editing ? `${colors.accent}22` : 'transparent', color: colors.text, cursor: spec ? 'pointer' : 'default', fontSize: '14px', fontWeight: 600, opacity: spec ? 1 : 0.5 }}
+            >
+              {editing ? '✏️ Editing' : '✏️ Edit'}
+            </button>
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setExportOpen((o) => !o)}
@@ -190,7 +215,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AnimatePresence mode="wait">
-                <SlideStage key={index} spec={spec} index={index} />
+                {EditorStage || <SlideStage key={index} spec={spec} index={index} />}
               </AnimatePresence>
             </div>
           )}
