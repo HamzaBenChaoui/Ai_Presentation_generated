@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext'
 import { specApi, ApiClientError } from '../lib/api'
 import type { Presentation, PresentationSpec } from '../types'
 import PresentationRenderer from './renderer/PresentationRenderer'
+import FullscreenPlayer from './renderer/FullscreenPlayer'
 
 interface Props {
   presentation: Presentation | null
@@ -16,6 +17,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
+  const [presenting, setPresenting] = useState(false)
 
   useEffect(() => {
     if (!presentation) return
@@ -55,7 +57,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
 
   const total = spec?.slides.length || 0
 
-  return (
+  const main = (
     <div
       onClick={onClose}
       style={{
@@ -104,12 +106,22 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
               {presentation.title}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'transparent', border: `1px solid ${colors.border}`, color: colors.textMuted, borderRadius: '10px', width: '34px', height: '34px', cursor: 'pointer', fontSize: '18px', flexShrink: 0 }}
-          >
-            ×
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              onClick={() => spec && setPresenting(true)}
+              disabled={!spec}
+              title="Present (fullscreen)"
+              style={{ padding: '8px 16px', borderRadius: '10px', border: `1px solid ${colors.border}`, background: 'transparent', color: colors.text, cursor: spec ? 'pointer' : 'default', fontSize: '14px', fontWeight: 600, opacity: spec ? 1 : 0.5 }}
+            >
+              ▶ Present
+            </button>
+            <button
+              onClick={onClose}
+              style={{ background: 'transparent', border: `1px solid ${colors.border}`, color: colors.textMuted, borderRadius: '10px', width: '34px', height: '34px', cursor: 'pointer', fontSize: '18px', flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Slide stage */}
@@ -163,6 +175,12 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
       </div>
     </div>
   )
+
+  if (presenting && spec) {
+    return <FullscreenPlayer spec={spec} onExit={() => setPresenting(false)} />
+  }
+
+  return main
 }
 
 // Renders a single active slide centered (16:9). The full PresentationSpec
