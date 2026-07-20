@@ -326,3 +326,45 @@ export const versionsApi = {
     return request<PresentationSpec>("POST", `/presentations/${presentationId}/versions/${versionId}/restore`);
   },
 };
+
+export interface ShareInfo {
+  id: string;
+  token: string;
+  visibility: string;
+  permission: string;
+  embed_allowed: boolean;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface CreateShareRequest {
+  visibility?: string;
+  password?: string;
+  expires_at?: string;
+  permission?: string;
+  embed_allowed?: boolean;
+}
+
+export const sharesApi = {
+  create(presentationId: string, req: CreateShareRequest) {
+    return request<ShareInfo>("POST", `/presentations/${presentationId}/shares`, req);
+  },
+  list(presentationId: string) {
+    return request<{ shares: ShareInfo[] }>("GET", `/presentations/${presentationId}/shares`);
+  },
+  remove(token: string) {
+    return request<void>("DELETE", `/shares/${token}`);
+  },
+};
+
+export interface SharedPresentation {
+  spec: PresentationSpec;
+  title: string;
+}
+
+export const publicSharesApi = {
+  get(token: string, password?: string) {
+    const qs = password ? `?password=${encodeURIComponent(password)}` : "";
+    return request<SharedPresentation>("GET", `/shared/${token}${qs}`);
+  },
+};
