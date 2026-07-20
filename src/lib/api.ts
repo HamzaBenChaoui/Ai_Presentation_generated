@@ -262,3 +262,25 @@ export const filesApi = {
     return request<void>("DELETE", `/files/${id}`);
   },
 };
+
+export interface AssetItem {
+  id: string;
+  kind: string;
+  url: string;
+  thumbnail: string | null;
+  attribution: string | null;
+  provider: string;
+}
+
+export interface AssetSearchResult {
+  items: AssetItem[];
+  total: number;
+}
+
+export type AssetKind = "image" | "icon" | "svg";
+
+export const assetsApi = {
+  search(q: string = "", kind: AssetKind = "image", limit: number = 12) {
+    return request<AssetSearchResult>("GET", `/assets/search?q=${encodeURIComponent(q)}&kind=${kind}&limit=${limit}`);
+  },
+};
