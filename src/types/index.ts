@@ -52,3 +52,20 @@ export interface AppState {
   isGenerating: boolean
   loadingStep: number
 }
+
+export interface Presentation {
+  id: string
+  owner_id: string
+  title: string
+  description: string | null
+  slide_count: number
+  status: string
+  theme: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PresentationList {
+  items: Presentation[]
+  total: number
+}

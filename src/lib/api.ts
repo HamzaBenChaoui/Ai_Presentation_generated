@@ -9,6 +9,8 @@
 
 export const API_BASE = "/api/v1";
 
+import type { Presentation, PresentationList } from "./../types";
+
 export interface User {
   id: string;
   email: string;
@@ -76,7 +78,9 @@ async function request<T>(
   token?: string | null,
 ): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  // Attach the stored access token automatically unless one is passed in.
+  const authToken = token ?? getAccessToken();
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
 
   const res = await fetch(`${API_BASE}${path}`, {
     method,
@@ -121,3 +125,28 @@ export const authApi = {
 };
 
 export { request };
+
+export const presentationsApi = {
+  list() {
+    return request<PresentationList>("GET", "/presentations");
+  },
+  get(id: string) {
+    return request<Presentation>("GET", `/presentations/${id}`);
+  },
+  create(title: string, description?: string | null, theme?: string | null) {
+    return request<Presentation>("POST", "/presentations", {
+      title,
+      description: description ?? null,
+      theme: theme ?? null,
+    });
+  },
+  rename(id: string, title: string) {
+    return request<Presentation>("PATCH", `/presentations/${id}`, { title });
+  },
+  duplicate(id: string) {
+    return request<Presentation>("POST", `/presentations/${id}/duplicate`);
+  },
+  remove(id: string) {
+    return request<void>("DELETE", `/presentations/${id}`);
+  },
+};
