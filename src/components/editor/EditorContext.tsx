@@ -48,6 +48,9 @@ interface EditorContextValue {
   // Selection
   setSelection: (sel: Selection | null) => void
 
+  // AI edit
+  applyAiEdit: (newSpec: PresentationSpec) => void
+
   // Persistence
   load: (presentationId: string) => Promise<void>
   forceSave: () => Promise<void>
@@ -248,6 +251,13 @@ export function EditorProvider({ children, presentationId }: Props) {
 
   const forceSave = useCallback(() => doSave(), [doSave])
 
+  const applyAiEdit = useCallback((newSpec: PresentationSpec) => {
+    if (!spec) return
+    pushHistory(spec, 'AI edit')
+    setSpec(newSpec)
+    scheduleSave()
+  }, [spec, pushHistory, scheduleSave])
+
   const value: EditorContextValue = {
     spec, isDirty, isSaving, saveError,
     canUndo: history.length > 0,
@@ -255,7 +265,7 @@ export function EditorProvider({ children, presentationId }: Props) {
     selection, copiedElement,
     updateElement, updateSlide, addElement, deleteElement, duplicateElement,
     deleteSlide, duplicateSlide,
-    undo, redo, copy, paste, setSelection,
+    undo, redo, copy, paste, setSelection, applyAiEdit,
     load, forceSave,
   }
 

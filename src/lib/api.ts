@@ -177,6 +177,23 @@ export const specApi = {
   },
 };
 
+export interface SpecEditResponse {
+  spec: PresentationSpec;
+  summary: string;
+  changed_indexes: number[];
+}
+
+export interface SpecEditRequest {
+  instruction: string;
+  target_indexes?: number[];
+}
+
+export const aiEditApi = {
+  run(id: string, req: SpecEditRequest) {
+    return request<SpecEditResponse>("POST", `/presentations/${id}/edit`, req);
+  },
+};
+
 export type ExportFormat = "html" | "pdf" | "pptx";
 
 // Exports a presentation to a downloadable file. The backend streams the

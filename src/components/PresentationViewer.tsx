@@ -8,6 +8,7 @@ import FullscreenPlayer from './renderer/FullscreenPlayer'
 import { DeckThemeProvider } from './renderer/DeckThemeContext'
 import ThemeSwitcher from './renderer/ThemeSwitcher'
 import { EditorProvider, useEditor } from './editor/EditorContext'
+import AiEditorPanel from './ai/AiEditorPanel'
 
 // Reads live spec from editor context. Only rendered inside EditorProvider.
 function EditorSlideStage({ index }: { index: number }) {
@@ -31,6 +32,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   const [index, setIndex] = useState(0)
   const [presenting, setPresenting] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [aiEditOpen, setAiEditOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState<ExportFormat | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -89,7 +91,12 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   // so the editor manages spec state (auto-save, undo/redo, etc.)
   const EditorStage = editing && spec ? (
     <EditorProvider presentationId={presentation.id}>
-      <EditorSlideStage index={index} />
+      <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+        <div style={{ flex: 1 }}>
+          <EditorSlideStage index={index} />
+        </div>
+        {aiEditOpen && <AiEditorPanel presentationId={presentation.id} onClose={() => setAiEditOpen(false)} />}
+      </div>
     </EditorProvider>
   ) : null
 
@@ -155,6 +162,15 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
             >
               {editing ? '✏️ Editing' : '✏️ Edit'}
             </button>
+            {editing && (
+              <button
+                onClick={() => setAiEditOpen((o) => !o)}
+                title="AI Editor"
+                style={{ padding: '8px 14px', borderRadius: '10px', border: `1px solid ${aiEditOpen ? colors.accent : colors.border}`, background: aiEditOpen ? `${colors.accent}22` : 'transparent', color: colors.text, cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+              >
+                ✨ AI Edit
+              </button>
+            )}
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setExportOpen((o) => !o)}
