@@ -1,5 +1,6 @@
 import type { PresentationSpec } from '../../types'
 import { defaultTokens, tokenFor } from './theme'
+import { useDeckTheme } from './DeckThemeContext'
 import SlideRenderer from './SlideRenderer'
 
 interface Props {
@@ -17,7 +18,11 @@ export default function PresentationRenderer({ spec, activeIndex, fullscreen }: 
   if (!spec || !spec.slides || spec.slides.length === 0) {
     return <div style={{ color: defaultTokens.textMuted, padding: 40 }}>No slides to display.</div>
   }
-  const tokens = tokenFor(spec.meta?.theme)
+  // Prefer the live deck-theme tokens (set via ThemeSwitcher) when available,
+  // otherwise fall back to the spec's stored theme name. useDeckTheme returns
+  // a safe default when no provider is present.
+  const deck = useDeckTheme()
+  const tokens = deck?.tokens || tokenFor(spec.meta?.theme)
 
   if (fullscreen && activeIndex !== undefined) {
     const slide = spec.slides[activeIndex]

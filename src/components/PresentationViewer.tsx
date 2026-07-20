@@ -5,6 +5,9 @@ import { specApi, ApiClientError } from '../lib/api'
 import type { Presentation, PresentationSpec } from '../types'
 import PresentationRenderer from './renderer/PresentationRenderer'
 import FullscreenPlayer from './renderer/FullscreenPlayer'
+import { DeckThemeProvider } from './renderer/DeckThemeContext'
+import ThemeSwitcher from './renderer/ThemeSwitcher'
+import type { ThemeName } from './renderer/theme'
 
 interface Props {
   presentation: Presentation | null
@@ -58,6 +61,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   const total = spec?.slides.length || 0
 
   const main = (
+    <DeckThemeProvider initial={(spec?.meta?.theme as ThemeName) || 'modern'}>
     <div
       onClick={onClose}
       style={{
@@ -107,6 +111,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {spec && <ThemeSwitcher />}
             <button
               onClick={() => spec && setPresenting(true)}
               disabled={!spec}
@@ -174,6 +179,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
         </div>
       </div>
     </div>
+    </DeckThemeProvider>
   )
 
   if (presenting && spec) {
