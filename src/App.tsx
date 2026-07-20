@@ -6,6 +6,7 @@ import Navbar from './components/Navbar'
 import HeroSection from './components/HeroSection'
 import GeneratorCard from './components/GeneratorCard/GeneratorCard'
 import RecentPresentations from './components/RecentPresentations'
+import FilesPanel from './components/FilesPanel'
 import FeaturesStrip from './components/FeaturesStrip'
 
 function AppContent() {
@@ -84,6 +85,7 @@ function AppContent() {
             textareaRef={textareaRef}
           />
           <RecentPresentations />
+          <FilesPanel />
           <FeaturesStrip />
         </main>
       </div>

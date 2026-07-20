@@ -9,7 +9,7 @@
 
 export const API_BASE = "/api/v1";
 
-import type { Presentation, PresentationList } from "./../types";
+import type { Presentation, PresentationList, FileAsset, FileList } from "./../types";
 
 export interface User {
   id: string;
@@ -148,5 +148,43 @@ export const presentationsApi = {
   },
   remove(id: string) {
     return request<void>("DELETE", `/presentations/${id}`);
+  },
+};
+
+async function uploadRequest<T>(path: string, form: FormData): Promise<T> {
+  const authToken = getAccessToken();
+  const headers: Record<string, string> = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const err = (data ?? {}) as ApiError;
+    throw new ApiClientError(
+      res.status,
+      err.error ?? "unknown_error",
+      err.message ?? res.statusText,
+      err.detail,
+    );
+  }
+  return data as T;
+}
+
+export const filesApi = {
+  list() {
+    return request<FileList>("GET", "/files");
+  },
+  upload(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return uploadRequest<FileAsset>("/files", form);
+  },
+  remove(id: string) {
+    return request<void>("DELETE", `/files/${id}`);
   },
 };

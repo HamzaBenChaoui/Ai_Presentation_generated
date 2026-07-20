@@ -69,3 +69,18 @@ export interface PresentationList {
   items: Presentation[]
   total: number
 }
+
+export interface FileAsset {
+  id: string
+  owner_id: string
+  filename: string
+  storage_path: string
+  content_type: string | null
+  size_bytes: number
+  created_at: string
+}
+
+export interface FileList {
+  items: FileAsset[]
+  total: number
+}
