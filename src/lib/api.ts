@@ -284,3 +284,24 @@ export const assetsApi = {
     return request<AssetSearchResult>("GET", `/assets/search?q=${encodeURIComponent(q)}&kind=${kind}&limit=${limit}`);
   },
 };
+
+export interface TemplateSlideHint {
+  layout: string;
+  purpose: string;
+  element_hints: string[];
+}
+
+export interface TemplateInfo {
+  name: string;
+  description: string;
+  slides: TemplateSlideHint[];
+}
+
+export const templatesApi = {
+  list() {
+    return request<{ templates: TemplateInfo[] }>("GET", "/templates");
+  },
+  suggest(q: string) {
+    return request<{ template: TemplateInfo }>("GET", `/templates/suggest?q=${encodeURIComponent(q)}`);
+  },
+};
