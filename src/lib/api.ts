@@ -174,6 +174,37 @@ export const specApi = {
   },
 };
 
+export type ExportFormat = "html" | "pdf" | "pptx";
+
+// Exports a presentation to a downloadable file. The backend streams the
+// bytes with a Content-Disposition header; we turn the blob into a download.
+export const exportApi = {
+  async download(id: string, format: ExportFormat): Promise<void> {
+    const authToken = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+    const res = await fetch(`${API_BASE}/presentations/${id}/export?format=${format}`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) {
+      throw new ApiClientError(res.status, "export_error", `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    const filename = match?.[1] || `presentation.${format}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
 async function uploadRequest<T>(path: string, form: FormData): Promise<T> {
   const authToken = getAccessToken();
   const headers: Record<string, string> = {};

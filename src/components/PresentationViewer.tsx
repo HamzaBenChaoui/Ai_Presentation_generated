@@ -8,6 +8,7 @@ import FullscreenPlayer from './renderer/FullscreenPlayer'
 import { DeckThemeProvider } from './renderer/DeckThemeContext'
 import ThemeSwitcher from './renderer/ThemeSwitcher'
 import type { ThemeName } from './renderer/theme'
+import { exportApi, type ExportFormat } from '../lib/api'
 
 interface Props {
   presentation: Presentation | null
@@ -21,6 +22,9 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
   const [presenting, setPresenting] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exporting, setExporting] = useState<ExportFormat | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!presentation) return
@@ -55,6 +59,20 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [presentation, spec, onClose])
+
+  const handleExport = async (fmt: ExportFormat) => {
+    if (!presentation) return
+    setExporting(fmt)
+    setExportError(null)
+    try {
+      await exportApi.download(presentation.id, fmt)
+    } catch (err) {
+      setExportError(err instanceof ApiClientError ? err.message : "Export failed")
+    } finally {
+      setExporting(null)
+      setExportOpen(false)
+    }
+  }
 
   if (!presentation) return null
 
@@ -112,6 +130,38 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {spec && <ThemeSwitcher />}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setExportOpen((o) => !o)}
+                disabled={!spec}
+                title="Export presentation"
+                style={{ padding: '8px 14px', borderRadius: '10px', border: `1px solid ${colors.border}`, background: 'transparent', color: colors.text, cursor: spec ? 'pointer' : 'default', fontSize: '14px', fontWeight: 600, opacity: spec ? 1 : 0.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                ⬇ Export
+              </button>
+              {exportOpen && (
+                <div
+                  onClick={() => setExportOpen(false)}
+                  style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 60, width: 200, background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 6, display: 'grid', gap: 4, boxShadow: '0 24px 60px rgba(0,0,0,0.5)' }}
+                >
+                  {([
+                    { fmt: 'html', label: 'HTML (animated)', hint: 'Keeps animations' },
+                    { fmt: 'pdf', label: 'PDF (static)', hint: 'Print-ready' },
+                    { fmt: 'pptx', label: 'PowerPoint', hint: 'Content only' },
+                  ] as { fmt: ExportFormat; label: string; hint: string }[]).map((opt) => (
+                    <button
+                      key={opt.fmt}
+                      onClick={(e) => { e.stopPropagation(); handleExport(opt.fmt) }}
+                      disabled={exporting !== null}
+                      style={{ textAlign: 'left', padding: '9px 12px', borderRadius: 9, cursor: exporting ? 'default' : 'pointer', border: '1px solid transparent', background: 'transparent', color: colors.text, display: 'flex', flexDirection: 'column' }}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{exporting === opt.fmt ? 'Exporting…' : opt.label}</span>
+                      <span style={{ fontSize: 11, color: colors.textMuted }}>{opt.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
               onClick={() => spec && setPresenting(true)}
               disabled={!spec}
@@ -145,6 +195,12 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
             </div>
           )}
         </div>
+
+        {exportError && (
+          <div style={{ padding: '8px 22px', color: '#ff6b81', fontSize: '13px', textAlign: 'center', borderTop: `1px solid ${colors.border}` }}>
+            {exportError}
+          </div>
+        )}
 
         {/* Footer / controls */}
         <div
