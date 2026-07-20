@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import { NAV_LINKS } from '../constants/data'
+import AuthModal from './AuthModal'
 
 export default function Navbar() {
   const { colors, mode, toggle } = useTheme()
+  const { user, isAuthenticated, signOut } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [activeLink, setActiveLink] = useState<string | null>(null)
+  const [authModal, setAuthModal] = useState<null | 'signin' | 'signup'>(null)
 
   return (
     <header
@@ -173,61 +177,109 @@ export default function Navbar() {
             )}
           </button>
 
-          {/* Sign in */}
-          <a
-            href="#"
-            style={{
-              padding: '8px 16px',
-              borderRadius: '10px',
-              fontSize: '14px',
-              fontWeight: '500',
-              textDecoration: 'none',
-              color: colors.textMuted,
-              backgroundColor: 'transparent',
-              border: `1px solid ${colors.border}`,
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = colors.text
-              e.currentTarget.style.borderColor = colors.borderActive
-              e.currentTarget.style.backgroundColor = colors.surface
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = colors.textMuted
-              e.currentTarget.style.borderColor = colors.border
-              e.currentTarget.style.backgroundColor = 'transparent'
-            }}
-          >
-            Sign in
-          </a>
+          {/* Auth area: real Sign in / Sign up or signed-in user */}
+          {isAuthenticated && user ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span
+                style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: colors.text,
+                  whiteSpace: 'nowrap',
+                }}
+                title={user.email}
+              >
+                {user.display_name || user.email}
+              </span>
+              <button
+                type="button"
+                onClick={() => { void signOut() }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: colors.textMuted,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.border}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = colors.text
+                  e.currentTarget.style.borderColor = colors.borderActive
+                  e.currentTarget.style.backgroundColor = colors.surface
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = colors.textMuted
+                  e.currentTarget.style.borderColor = colors.border
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setAuthModal('signin')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: colors.textMuted,
+                  backgroundColor: 'transparent',
+                  border: `1px solid ${colors.border}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = colors.text
+                  e.currentTarget.style.borderColor = colors.borderActive
+                  e.currentTarget.style.backgroundColor = colors.surface
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = colors.textMuted
+                  e.currentTarget.style.borderColor = colors.border
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
+              >
+                Sign in
+              </button>
 
-          {/* CTA */}
-          <a
-            href="#"
-            style={{
-              padding: '9px 20px',
-              borderRadius: '10px',
-              fontSize: '14px',
-              fontWeight: '600',
-              textDecoration: 'none',
-              color: '#fff',
-              background: `linear-gradient(135deg, ${colors.accent}, ${colors.accent2})`,
-              boxShadow: `0 4px 18px ${colors.glow}`,
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.boxShadow = `0 8px 28px ${colors.glow}`
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = `0 4px 18px ${colors.glow}`
-            }}
-          >
-            Get started free
-          </a>
+              <button
+                type="button"
+                onClick={() => setAuthModal('signup')}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#fff',
+                  background: `linear-gradient(135deg, ${colors.accent}, ${colors.accent2})`,
+                  boxShadow: `0 4px 18px ${colors.glow}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = `0 8px 28px ${colors.glow}`
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = `0 4px 18px ${colors.glow}`
+                }}
+              >
+                Get started free
+              </button>
+            </>
+          )}
+
 
           {/* Mobile hamburger */}
           <button
@@ -294,6 +346,10 @@ export default function Navbar() {
             </a>
           ))}
         </div>
+      )}
+
+      {authModal && (
+        <AuthModal mode={authModal} onClose={() => setAuthModal(null)} />
       )}
     </header>
   )
