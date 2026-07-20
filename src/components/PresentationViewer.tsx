@@ -1,30 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
-import { generationApi, ApiClientError } from '../lib/api'
-import type { Presentation, Slide } from '../types'
+import { specApi, ApiClientError } from '../lib/api'
+import type { Presentation, PresentationSpec } from '../types'
+import PresentationRenderer from './renderer/PresentationRenderer'
 
 interface Props {
   presentation: Presentation | null
   onClose: () => void
 }
 
-// Gradient backgrounds keyed by theme name (mirrors PRESENTATION_THEMES).
-const THEME_GRADIENTS: Record<string, string> = {
-  Void: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-  Bright: 'linear-gradient(135deg, #f8f9ff 0%, #e8eaf6 100%)',
-  Ocean: 'linear-gradient(135deg, #0d3b66 0%, #1b6ca8 100%)',
-  Sunset: 'linear-gradient(135deg, #ff6b35 0%, #f7c59f 100%)',
-  Forest: 'linear-gradient(135deg, #1a3c34 0%, #2d6a4f 100%)',
-}
-
-function themeGradient(p: Presentation | null): string {
-  if (p?.theme && THEME_GRADIENTS[p.theme]) return THEME_GRADIENTS[p.theme]
-  return 'linear-gradient(135deg, #7c6aff 0%, #a89fff 100%)'
-}
-
 export default function PresentationViewer({ presentation, onClose }: Props) {
-  const { colors, mode } = useTheme()
-  const [slides, setSlides] = useState<Slide[]>([])
+  const { colors } = useTheme()
+  const [spec, setSpec] = useState<PresentationSpec | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
@@ -33,33 +20,32 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
     if (!presentation) return
     setIndex(0)
     setError(null)
+    setSpec(null)
     setLoading(true)
-    generationApi
-      .slides(presentation.id)
-      .then((data) => setSlides(data))
+    specApi
+      .get(presentation.id)
+      .then((data) => setSpec(data))
       .catch((err) =>
-        setError(err instanceof ApiClientError ? err.message : 'Failed to load slides'),
+        setError(err instanceof ApiClientError ? err.message : 'Failed to load presentation'),
       )
       .finally(() => setLoading(false))
   }, [presentation])
 
-  // Close on Escape.
+  // Keyboard navigation (Phase 10 will also bind these in fullscreen).
   useEffect(() => {
     if (!presentation) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
-      if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, Math.max(0, slides.length - 1)))
-      if (e.key === 'ArrowLeft') setIndex((i) => Math.max(i - 1, 0))
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') setIndex((i) => Math.min(i + 1, Math.max(0, (spec?.slides.length || 1) - 1)))
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') setIndex((i) => Math.max(i - 1, 0))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [presentation, slides.length, onClose])
+  }, [presentation, spec, onClose])
 
   if (!presentation) return null
 
-  const current = slides[index]
-  const bg = themeGradient(presentation)
-  const isDarkBg = !presentation.theme || presentation.theme === 'Void' || presentation.theme === 'Ocean' || presentation.theme === 'Forest' || presentation.theme === 'Sunset'
+  const total = spec?.slides.length || 0
 
   return (
     <div
@@ -67,7 +53,7 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(6,6,16,0.82)',
+        backgroundColor: 'rgba(6,6,16,0.86)',
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
         zIndex: 4000,
@@ -81,8 +67,8 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '960px',
-          height: 'min(86vh, 620px)',
+          maxWidth: '1100px',
+          height: 'min(90vh, 720px)',
           display: 'flex',
           flexDirection: 'column',
           borderRadius: '18px',
@@ -119,48 +105,16 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
         </div>
 
         {/* Slide stage */}
-        <div style={{ flex: 1, padding: '28px', display: 'flex', alignItems: 'stretch', minHeight: 0 }}>
+        <div style={{ flex: 1, padding: '24px', overflow: 'auto', minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {loading ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, fontSize: '14px' }}>
-              Loading slides…
-            </div>
+            <div style={{ color: colors.textMuted, fontSize: '14px' }}>Loading presentation…</div>
           ) : error ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff6b81', fontSize: '14px', textAlign: 'center', padding: '20px' }}>
-              {error}
-            </div>
-          ) : !current ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: colors.textMuted, fontSize: '14px' }}>
-              No slides yet.
-            </div>
+            <div style={{ color: '#ff6b81', fontSize: '14px', textAlign: 'center', padding: '20px' }}>{error}</div>
+          ) : !spec ? (
+            <div style={{ color: colors.textMuted, fontSize: '14px' }}>No content.</div>
           ) : (
-            <div
-              style={{
-                flex: 1,
-                borderRadius: '14px',
-                background: bg,
-                color: isDarkBg ? '#ffffff' : '#1a1a2e',
-                padding: '44px 52px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}
-            >
-              <h2 style={{ fontSize: '34px', fontWeight: 800, fontFamily: 'Syne, sans-serif', margin: '0 0 28px', lineHeight: 1.15 }}>
-                {current.title}
-              </h2>
-              <ul style={{ margin: 0, paddingLeft: '22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {current.bullets.map((b, i) => (
-                  <li key={i} style={{ fontSize: '18px', lineHeight: 1.5 }}>
-                    {b}
-                  </li>
-                ))}
-              </ul>
-              {current.notes && (
-                <p style={{ marginTop: '28px', fontSize: '13px', opacity: 0.7, fontStyle: 'italic' }}>
-                  {current.notes}
-                </p>
-              )}
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <SlideStage spec={spec} index={index} />
             </div>
           )}
         </div>
@@ -178,40 +132,37 @@ export default function PresentationViewer({ presentation, onClose }: Props) {
           <button
             onClick={() => setIndex((i) => Math.max(0, i - 1))}
             disabled={index === 0}
-            style={{
-              padding: '9px 16px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: index === 0 ? colors.textDim : colors.text,
-              cursor: index === 0 ? 'default' : 'pointer',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
+            style={{ padding: '9px 16px', borderRadius: '10px', border: `1px solid ${colors.border}`, background: 'transparent', color: index === 0 ? colors.textDim : colors.text, cursor: index === 0 ? 'default' : 'pointer', fontSize: '14px', fontWeight: 600 }}
           >
             ← Prev
           </button>
-          <div style={{ fontSize: '13px', color: colors.textMuted }}>
-            {slides.length === 0 ? '0 / 0' : `${index + 1} / ${slides.length}`}
+          <div style={{ fontSize: '13px', color: colors.textMuted, display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {total === 0 ? '0 / 0' : `${index + 1} / ${total}`}
+            <span style={{ width: '120px', height: '4px', borderRadius: '2px', background: colors.surface2, overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', width: total ? `${((index + 1) / total) * 100}%` : '0%', background: `linear-gradient(90deg, ${colors.accent}, ${colors.accent2})` }} />
+            </span>
           </div>
           <button
-            onClick={() => setIndex((i) => Math.min(i + 1, Math.max(0, slides.length - 1)))}
-            disabled={index >= slides.length - 1}
-            style={{
-              padding: '9px 16px',
-              borderRadius: '10px',
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: index >= slides.length - 1 ? colors.textDim : colors.text,
-              cursor: index >= slides.length - 1 ? 'default' : 'pointer',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
+            onClick={() => setIndex((i) => Math.min(i + 1, Math.max(0, total - 1)))}
+            disabled={index >= total - 1}
+            style={{ padding: '9px 16px', borderRadius: '10px', border: `1px solid ${colors.border}`, background: 'transparent', color: index >= total - 1 ? colors.textDim : colors.text, cursor: index >= total - 1 ? 'default' : 'pointer', fontSize: '14px', fontWeight: 600 }}
           >
             Next →
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Renders a single active slide centered (16:9). The full PresentationSpec
+// renderer is reused; only the active slide is shown here.
+function SlideStage({ spec, index }: { spec: PresentationSpec; index: number }) {
+  const slide = spec.slides[index]
+  if (!slide) return null
+  return (
+    <div style={{ width: '100%', maxWidth: '960px' }}>
+      <PresentationRenderer spec={{ meta: spec.meta, slides: [slide] }} />
     </div>
   )
 }
