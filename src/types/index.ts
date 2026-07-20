@@ -84,3 +84,11 @@ export interface FileList {
   items: FileAsset[]
   total: number
 }
+
+export interface Slide {
+  index: number
+  title: string
+  bullets: string[]
+  notes: string | null
+  layout: string
+}

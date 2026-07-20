@@ -32,7 +32,7 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
-export default function RecentPresentations() {
+export default function RecentPresentations({ onOpen }: { onOpen: (p: Presentation) => void }) {
   const { colors } = useTheme()
   const { isAuthenticated } = useAuth()
 
@@ -156,6 +156,7 @@ export default function RecentPresentations() {
               <div
                 key={p.id ?? index}
                 style={{ backgroundColor: colors.surface, border: `1px solid ${colors.border}`, borderRadius: '14px', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.22s ease', position: 'relative' }}
+                onClick={() => { if (isAuthenticated) onOpen(p) }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = colors.borderActive; e.currentTarget.style.boxShadow = '0 16px 48px rgba(0,0,0,0.18)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = colors.border; e.currentTarget.style.boxShadow = 'none' }}
               >

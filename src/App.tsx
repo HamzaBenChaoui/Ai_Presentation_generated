@@ -8,6 +8,8 @@ import GeneratorCard from './components/GeneratorCard/GeneratorCard'
 import RecentPresentations from './components/RecentPresentations'
 import FilesPanel from './components/FilesPanel'
 import FeaturesStrip from './components/FeaturesStrip'
+import PresentationViewer from './components/PresentationViewer'
+import type { Presentation } from './types'
 
 function AppContent() {
   const [currentStep, setCurrentStep] = useState(0)
@@ -18,6 +20,8 @@ function AppContent() {
   const [selectedTheme, setSelectedTheme] = useState(0)
   const [isGenerating, setIsGenerating] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [viewerPresentation, setViewerPresentation] = useState<Presentation | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
@@ -35,7 +39,7 @@ function AppContent() {
     }
   }, [])
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       if (textareaRef.current) {
         textareaRef.current.style.borderColor = '#ff4757'
@@ -48,6 +52,32 @@ function AppContent() {
     }
     setIsGenerating(true)
     setLoadingStep(0)
+    setGenerateError(null)
+    try {
+      const { generationApi } = await import('./lib/api')
+      const PRESENTATION_THEMES = (await import('./constants/data')).PRESENTATION_THEMES
+      const themeName = PRESENTATION_THEMES[selectedTheme]?.name ?? null
+      const created = await generationApi.generate({
+        prompt: prompt.trim(),
+        slide_count: parseInt(slideCount, 10) || 10,
+        tone,
+        language,
+        theme: themeName,
+      })
+      // Open the generated deck in the viewer.
+      setViewerPresentation(created as Presentation)
+    } catch (err) {
+      // Surface backend errors inline under the card. We avoid importing
+      // ApiClientError at module top to keep the dynamic import simple.
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Generation failed. Please try again.'
+      setGenerateError(message)
+    } finally {
+      setIsGenerating(false)
+      setLoadingStep(0)
+    }
   }
 
   const handleCancel = () => {
@@ -63,6 +93,10 @@ function AppContent() {
         loadingStep={loadingStep}
         onCancel={handleCancel}
         onStepChange={setLoadingStep}
+      />
+      <PresentationViewer
+        presentation={viewerPresentation}
+        onClose={() => setViewerPresentation(null)}
       />
       <div style={{ position: 'relative', zIndex: 10 }}>
         <Navbar />
@@ -82,9 +116,10 @@ function AppContent() {
             onLanguageChange={setLanguage}
             onThemeChange={setSelectedTheme}
             onGenerate={handleGenerate}
+            generateError={generateError}
             textareaRef={textareaRef}
           />
-          <RecentPresentations />
+          <RecentPresentations onOpen={setViewerPresentation} />
           <FilesPanel />
           <FeaturesStrip />
         </main>

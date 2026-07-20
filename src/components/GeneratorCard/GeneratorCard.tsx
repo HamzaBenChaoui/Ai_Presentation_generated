@@ -19,6 +19,7 @@ interface Props {
   onLanguageChange: (value: string) => void
   onThemeChange: (index: number) => void
   onGenerate: () => void
+  generateError: string | null
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
 }
 
@@ -36,6 +37,7 @@ export default function GeneratorCard({
   onLanguageChange,
   onThemeChange,
   onGenerate,
+  generateError,
   textareaRef,
 }: Props) {
   const { colors } = useTheme()
@@ -62,6 +64,7 @@ export default function GeneratorCard({
           prompt={prompt}
           onPromptChange={onPromptChange}
           textareaRef={textareaRef}
+          error={generateError}
         />
 
         <StepCustomize

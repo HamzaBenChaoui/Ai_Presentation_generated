@@ -9,7 +9,7 @@
 
 export const API_BASE = "/api/v1";
 
-import type { Presentation, PresentationList, FileAsset, FileList } from "./../types";
+import type { Presentation, PresentationList, FileAsset, FileList, Slide } from "./../types";
 
 export interface User {
   id: string;
@@ -148,6 +148,23 @@ export const presentationsApi = {
   },
   remove(id: string) {
     return request<void>("DELETE", `/presentations/${id}`);
+  },
+};
+
+export interface GenerateRequest {
+  prompt: string;
+  slide_count: number;
+  tone: string;
+  language: string;
+  theme: string | null;
+}
+
+export const generationApi = {
+  generate(req: GenerateRequest) {
+    return request<Presentation>("POST", "/presentations/generate", req);
+  },
+  slides(id: string) {
+    return request<Slide[]>("GET", `/presentations/${id}/slides`);
   },
 };
 

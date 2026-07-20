@@ -6,11 +6,12 @@ interface Props {
   prompt: string
   onPromptChange: (value: string) => void
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  error?: string | null
 }
 
 const MAX_CHARS = 1000
 
-export default function StepDescribe({ visible, prompt, onPromptChange, textareaRef }: Props) {
+export default function StepDescribe({ visible, prompt, onPromptChange, textareaRef, error }: Props) {
   const { colors } = useTheme()
   const pct = Math.min(prompt.length / MAX_CHARS, 1)
 
@@ -132,6 +133,12 @@ export default function StepDescribe({ visible, prompt, onPromptChange, textarea
           ))}
         </div>
       </div>
+
+      {error && (
+        <div style={{ marginTop: '16px', fontSize: '13px', color: '#ff6b81', backgroundColor: 'rgba(255,75,97,0.1)', border: '1px solid rgba(255,75,97,0.3)', borderRadius: '10px', padding: '10px 12px' }}>
+          {error}
+        </div>
+      )}
     </div>
   )
 }
