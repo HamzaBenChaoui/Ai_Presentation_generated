@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useTheme } from '../../context/ThemeContext'
+import { Copy, Check, Send, X, Sparkles, Loader2 } from 'lucide-react'
+import { cn } from '../../lib/cn'
 import { useEditor } from '../editor/EditorContext'
-import { aiEditApi, ApiClientError } from '../../lib/api'
+import { aiEditApi, type SpecEditRequest } from '../../lib/api'
+import type { PresentationSpec } from '../../types'
 
 interface Props {
   presentationId: string
@@ -14,39 +16,87 @@ interface Message {
 }
 
 const QUICK_ACTIONS = [
-  { label: 'Make it modern', instruction: 'make it modern' },
-  { label: 'Make it minimal', instruction: 'make it minimal' },
-  { label: 'Make it dark', instruction: 'make it dark' },
-  { label: 'Reduce text', instruction: 'reduce text' },
-  { label: 'Add statistics', instruction: 'add statistic' },
-  { label: 'Add a slide', instruction: 'add slide' },
+  { label: 'Make it modern', instruction: 'Change theme to modern' },
+  { label: 'Make it minimal', instruction: 'Change theme to minimal' },
+  { label: 'Make it dark', instruction: 'Change theme to dark' },
+  { label: 'Reduce text', instruction: 'Reduce text across all slides — make every point concise and impactful' },
+  { label: 'Add statistics', instruction: 'Add relevant statistics to this presentation with realistic data' },
+  { label: 'Add a slide', instruction: 'Add a new slide that fits the presentation narrative' },
+  { label: 'Improve wording', instruction: 'Improve the wording on all slides — make it more professional and concise' },
+  { label: 'Better titles', instruction: 'Rewrite all slide titles to be short, expressive, and impactful' },
 ]
 
 export default function AiEditorPanel({ presentationId, onClose }: Props) {
-  const { colors } = useTheme()
   const { spec, applyAiEdit } = useEditor()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, loading])
+
+  const copyToClipboard = useCallback(async (text: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    } catch {
+      // fallback
+    }
+  }, [])
 
   const runEdit = useCallback(async (instruction: string) => {
     if (!spec || loading) return
     setLoading(true)
-    setMessages(prev => [...prev, { role: 'user', text: instruction }])
+    const userMsg: Message = { role: 'user', text: instruction }
+    setMessages(prev => [...prev, userMsg])
     setInput('')
+
+    const req: SpecEditRequest = { instruction }
+
     try {
-      const result = await aiEditApi.run(presentationId, { instruction })
+      // Try streaming first, fall back to non-streaming
+      let result: { spec: PresentationSpec; summary: string } | null = null
+      let useStreaming = true
+
+      try {
+        const stream = aiEditApi.stream(presentationId, req)
+        let thinkingDone = false
+
+        for await (const { event, data } of stream) {
+          if (event === 'thinking' && !thinkingDone) {
+            thinkingDone = true
+          } else if (event === 'result') {
+            const parsed = JSON.parse(data)
+            result = { spec: parsed.spec, summary: parsed.summary }
+          } else if (event === 'error') {
+            const parsed = JSON.parse(data)
+            throw new Error(parsed.message || 'AI edit failed')
+          }
+        }
+
+        if (!result) {
+          useStreaming = false
+        }
+      } catch {
+        useStreaming = false
+      }
+
+      if (!useStreaming || !result) {
+        const res = await aiEditApi.run(presentationId, req)
+        result = { spec: res.spec, summary: res.summary }
+      }
+
       applyAiEdit(result.spec)
       setMessages(prev => [...prev, { role: 'ai', text: result.summary }])
     } catch (err) {
-      const msg = err instanceof ApiClientError ? err.message : 'AI edit failed'
+      const msg = err instanceof Error ? err.message : 'AI edit failed'
       setMessages(prev => [...prev, { role: 'ai', text: `Error: ${msg}` }])
     } finally {
       setLoading(false)
@@ -60,62 +110,39 @@ export default function AiEditorPanel({ presentationId, onClose }: Props) {
     runEdit(trimmed)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const trimmed = input.trim()
+      if (trimmed) runEdit(trimmed)
+    }
+  }
+
   return (
-    <div
-      style={{
-        width: '320px',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        borderLeft: `1px solid ${colors.border}`,
-        background: colors.surface,
-      }}
-    >
+    <div className="flex flex-col h-full bg-surface border-l border-border">
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 16px',
-          borderBottom: `1px solid ${colors.border}`,
-        }}
-      >
-        <span style={{ fontSize: '14px', fontWeight: 700, color: colors.text }}>AI Editor</span>
-        <button
-          onClick={onClose}
-          style={{ background: 'transparent', border: 'none', color: colors.textMuted, cursor: 'pointer', fontSize: '18px' }}
-        >
-          x
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-accent" />
+          <span className="text-sm font-semibold text-text">AI Editor</span>
+        </div>
+        <button onClick={onClose} className="text-text-dim hover:text-text transition-colors cursor-pointer">
+          <X size={16} />
         </button>
       </div>
 
       {/* Quick actions */}
-      <div
-        style={{
-          padding: '10px 12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 6,
-          borderBottom: `1px solid ${colors.border}`,
-        }}
-      >
+      <div className="flex flex-wrap gap-1.5 px-3 py-2.5 border-b border-border shrink-0">
         {QUICK_ACTIONS.map(action => (
           <button
             key={action.label}
             onClick={() => runEdit(action.instruction)}
             disabled={loading}
-            style={{
-              padding: '5px 10px',
-              borderRadius: 8,
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: colors.text,
-              cursor: loading ? 'default' : 'pointer',
-              fontSize: '11px',
-              fontWeight: 600,
-              opacity: loading ? 0.5 : 1,
-            }}
+            className={cn(
+              'px-2.5 py-1 rounded-lg border border-border text-xs font-medium transition-colors cursor-pointer',
+              'hover:bg-surface2 hover:text-text text-text-dim',
+              'disabled:opacity-40 disabled:cursor-default',
+            )}
           >
             {action.label}
           </button>
@@ -123,88 +150,66 @@ export default function AiEditorPanel({ presentationId, onClose }: Props) {
       </div>
 
       {/* Messages */}
-      <div
-        ref={listRef}
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '12px 16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        {messages.length === 0 && (
-          <div style={{ color: colors.textMuted, fontSize: '12px', textAlign: 'center', marginTop: 20 }}>
-            Type an instruction or use a quick action above.
+      <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
+        {messages.length === 0 && !loading && (
+          <div className="flex-1 flex items-center justify-center">
+            <span className="text-xs text-text-dim text-center px-4">
+              Type an instruction or use a quick action above.
+            </span>
           </div>
         )}
+
         {messages.map((msg, i) => (
           <div
             key={i}
-            style={{
-              alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: '85%',
-              padding: '8px 12px',
-              borderRadius: 10,
-              background: msg.role === 'user' ? `${colors.accent}22` : `${colors.surface2}`,
-              color: colors.text,
-              fontSize: '13px',
-              lineHeight: 1.5,
-            }}
+            className={cn(
+              'group relative max-w-[90%] px-3 py-2 rounded-xl text-sm leading-relaxed',
+              msg.role === 'user'
+                ? 'self-end bg-accent/10 text-text'
+                : 'self-start bg-surface2 text-text',
+            )}
           >
             {msg.text}
+            {msg.role === 'ai' && (
+              <button
+                onClick={() => copyToClipboard(msg.text, i)}
+                className="absolute -right-1 -top-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md bg-surface border border-border text-text-dim hover:text-text cursor-pointer"
+                title="Copy"
+              >
+                {copiedIdx === i ? <Check size={11} /> : <Copy size={11} />}
+              </button>
+            )}
           </div>
         ))}
+
         {loading && (
-          <div style={{ alignSelf: 'flex-start', color: colors.textMuted, fontSize: '12px' }}>
-            Slide AI is thinking...
+          <div className="self-start flex items-center gap-2 px-3 py-2 rounded-xl bg-surface2">
+            <Loader2 size={12} className="animate-spin text-accent" />
+            <span className="text-xs text-text-dim">Slide AI is thinking...</span>
           </div>
         )}
       </div>
 
       {/* Input */}
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          display: 'flex',
-          gap: 8,
-          padding: '12px 16px',
-          borderTop: `1px solid ${colors.border}`,
-        }}
-      >
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 px-3 py-3 border-t border-border shrink-0">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="e.g. make it bold..."
+          onKeyDown={handleKeyDown}
+          placeholder="e.g. make the titles more impactful..."
           disabled={loading}
-          style={{
-            flex: 1,
-            padding: '8px 12px',
-            borderRadius: 10,
-            border: `1px solid ${colors.border}`,
-            background: colors.surface2,
-            color: colors.text,
-            fontSize: '13px',
-            outline: 'none',
-          }}
+          className="flex-1 px-3 py-2 rounded-lg border border-border bg-surface2 text-text text-sm placeholder:text-text-dim outline-none focus:border-accent transition-colors disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          style={{
-            padding: '8px 14px',
-            borderRadius: 10,
-            border: `1px solid ${colors.accent}`,
-            background: `${colors.accent}22`,
-            color: colors.accent,
-            cursor: loading || !input.trim() ? 'default' : 'pointer',
-            fontSize: '13px',
-            fontWeight: 700,
-            opacity: loading || !input.trim() ? 0.5 : 1,
-          }}
+          className={cn(
+            'p-2 rounded-lg border border-accent text-accent transition-colors cursor-pointer',
+            'hover:bg-accent/10 disabled:opacity-40 disabled:cursor-default',
+          )}
         >
-          Send
+          <Send size={14} />
         </button>
       </form>
     </div>

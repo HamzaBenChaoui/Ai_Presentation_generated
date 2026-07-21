@@ -192,6 +192,48 @@ export const aiEditApi = {
   run(id: string, req: SpecEditRequest) {
     return request<SpecEditResponse>("POST", `/presentations/${id}/edit`, req);
   },
+
+  /** Streaming edit — returns an async iterator of SSE events. */
+  async *stream(id: string, req: SpecEditRequest): AsyncGenerator<{ event: string; data: string }> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const authToken = getAccessToken();
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+    const res = await fetch(`${API_BASE}/presentations/${id}/edit/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req),
+    });
+
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Stream request failed: ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      let event = "";
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          event = line.slice(7).trim();
+        } else if (line.startsWith("data: ") && event) {
+          const data = line.slice(6);
+          yield { event, data };
+          event = "";
+        }
+      }
+    }
+  },
 };
 
 export type ExportFormat = "html" | "pdf" | "pptx";
