@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { tokenFor, type ThemeName } from './theme'
 
 interface DeckThemeValue {
@@ -17,6 +17,7 @@ export function DeckThemeProvider({
   children: ReactNode
 }) {
   const [theme, setTheme] = useState<ThemeName>((initial as ThemeName) || 'modern')
+  useEffect(() => { if (initial) setTheme(initial as ThemeName) }, [initial])
   return (
     <DeckThemeContext.Provider value={{ theme, setTheme, tokens: tokenFor(theme) }}>
       {children}
