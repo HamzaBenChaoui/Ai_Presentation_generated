@@ -229,6 +229,9 @@ const themes: Record<ThemeName, ThemeDef> = {
 
 export const defaultTokens: RenderTokens = themes.modern.tokens
 
+/** Full theme map for theme selection UIs. */
+export { themes as themeMap }
+
 export const themeNames: ThemeName[] = Object.keys(themes) as ThemeName[]
 export const themeLabels: Record<ThemeName, string> = Object.fromEntries(
   themeNames.map((n) => [n, themes[n].label]),
