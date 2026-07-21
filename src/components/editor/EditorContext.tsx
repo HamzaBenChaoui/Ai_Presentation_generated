@@ -106,6 +106,14 @@ export function EditorProvider({ children, presentationId }: Props) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pidRef = useRef(presentationId)
 
+  // --- load spec on mount ---
+
+  useEffect(() => {
+    if (presentationId) {
+      load(presentationId)
+    }
+  }, [presentationId])
+
   // --- push to history ---
 
   const pushHistory = useCallback((newSpec: PresentationSpec, note: string) => {
