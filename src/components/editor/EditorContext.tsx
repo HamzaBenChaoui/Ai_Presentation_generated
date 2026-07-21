@@ -28,6 +28,9 @@ interface EditorContextValue {
   selection: Selection | null
   copiedElement: SpecElement | null
 
+  // Editing state (for ElementRenderer to detect)
+  editing: boolean
+
   // Mutations
   updateElement: (slideIndex: number, elementIndex: number, patch: Partial<SpecElement>) => void
   updateSlide: (slideIndex: number, patch: Partial<SlideSpec>) => void
@@ -36,6 +39,7 @@ interface EditorContextValue {
   duplicateElement: (slideIndex: number, elementIndex: number) => void
   deleteSlide: (slideIndex: number) => void
   duplicateSlide: (slideIndex: number) => void
+  updateElementText: (slideIndex: number, elementIndex: number, text: string) => void
 
   // History
   undo: () => void
@@ -96,6 +100,7 @@ export function EditorProvider({ children, presentationId }: Props) {
   const [future, setFuture] = useState<HistoryEntry[]>([])
   const [selection, setSelectionState] = useState<Selection | null>(null)
   const [copiedElement, setCopiedElement] = useState<SpecElement | null>(null)
+  const editing = true // EditorProvider always means editing is on
 
   const savedHashRef = useRef<string>('')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -192,6 +197,22 @@ export function EditorProvider({ children, presentationId }: Props) {
     scheduleSave()
   }, [spec, pushHistory, scheduleSave])
 
+  const updateElementText = useCallback((slideIndex: number, elementIndex: number, text: string) => {
+    if (!spec) return
+    const el = spec.slides[slideIndex]?.elements?.[elementIndex]
+    if (!el || !('text' in el) || el.text === text) return
+    pushHistory(spec, `edit text on slide ${slideIndex}`)
+    const slides = spec.slides.map((s, si) => {
+      if (si !== slideIndex) return s
+      return {
+        ...s,
+        elements: s.elements.map((e, ei) => (ei === elementIndex ? { ...e, text } : e)),
+      }
+    })
+    setSpec({ ...spec, slides })
+    scheduleSave()
+  }, [spec, pushHistory, scheduleSave])
+
   // --- undo / redo ---
 
   const undo = useCallback(() => {
@@ -263,8 +284,9 @@ export function EditorProvider({ children, presentationId }: Props) {
     canUndo: history.length > 0,
     canRedo: future.length > 0,
     selection, copiedElement,
+    editing,
     updateElement, updateSlide, addElement, deleteElement, duplicateElement,
-    deleteSlide, duplicateSlide,
+    deleteSlide, duplicateSlide, updateElementText,
     undo, redo, copy, paste, setSelection, applyAiEdit,
     load, forceSave,
   }

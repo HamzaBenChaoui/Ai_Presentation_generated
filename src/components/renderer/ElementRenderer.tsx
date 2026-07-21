@@ -1,6 +1,18 @@
+import { createContext, useContext } from 'react'
 import type { CSSProperties } from 'react'
 import type { SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
+import { useEditor } from '../editor/EditorContext'
+import EditableText from '../editor/EditableText'
+
+/** Simple context to pass the current slide index down to ElementRenderer. */
+const ActiveSlideIndex = createContext(0)
+
+export function ActiveSlideIndexProvider({ slideIndex, children }: { slideIndex: number; children: React.ReactNode }) {
+  return <ActiveSlideIndex.Provider value={slideIndex}>{children}</ActiveSlideIndex.Provider>
+}
+
+export function useActiveSlideIndex() { return useContext(ActiveSlideIndex) }
 
 interface Props {
   el: SpecElement
@@ -8,9 +20,31 @@ interface Props {
   index?: number
 }
 
-// Renders a single specification element. Each element is wrapped so the
-// animation engine (Phase 9) can target it by its index and animation hint.
 export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 }: Props) {
+  let editorCtx: ReturnType<typeof useEditor> | null = null
+  try { editorCtx = useEditor() } catch { /* not in editor */ }
+  const slideIndex = useActiveSlideIndex()
+  const isEditing = editorCtx?.editing === true && (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph')
+
+  const handleTextChange = (newText: string) => {
+    if (editorCtx) {
+      // Find the active slide index from the spec — for fullscreen single-slide mode,
+      // the active slide is the one being displayed
+      // We need the current slide index; EditorContext doesn't track it directly,
+      // but the PresentationRenderer in fullscreen mode renders slide at activeIndex.
+      // We use 0 as default since fullscreen only shows one slide.
+      // The real fix: use the active slide index from the parent.
+      // For now, use the spec's current slides index.
+      // This works because in fullscreen mode we only render the active slide,
+      // and the ElementRenderer gets the elements from that slide.
+      // We need to find which slide this element belongs to.
+      // Simple approach: just use updateElement which already exists.
+      if (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph') {
+        editorCtx.updateElement(slideIndex, index, { text: newText })
+      }
+    }
+  }
+
   const style: CSSProperties = {
     fontFamily: tokens.fontBody,
     color: tokens.text,
@@ -20,37 +54,67 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
   const key = `${el.type}-${index}`
 
   switch (el.type) {
-    case 'title':
+    case 'title': {
+      const titleStyle: CSSProperties = {
+        fontFamily: tokens.fontHeading,
+        fontSize: el.level === 1 ? 'clamp(32px, 5vw, 64px)' : el.level === 2 ? 'clamp(26px, 3.6vw, 44px)' : 'clamp(20px, 2.6vw, 32px)',
+        fontWeight: 800,
+        lineHeight: 1.1,
+        letterSpacing: '-0.02em',
+        margin: 0,
+        color: tokens.text,
+        display: 'block',
+      }
+      const tag = el.level === 1 ? 'h1' : el.level === 2 ? 'h2' : 'h3'
+
+      if (isEditing) {
+        return (
+          <EditableText
+            value={el.text ?? ''}
+            onChange={handleTextChange}
+            as={tag}
+            style={titleStyle}
+          />
+        )
+      }
       return (
         <h1
           key={key}
           {...{ [anim]: '' } as any}
-          style={{
-            ...style,
-            fontFamily: tokens.fontHeading,
-            fontSize: el.level === 1 ? 'clamp(32px, 5vw, 64px)' : el.level === 2 ? 'clamp(26px, 3.6vw, 44px)' : 'clamp(20px, 2.6vw, 32px)',
-            fontWeight: 800,
-            lineHeight: 1.1,
-            letterSpacing: '-0.02em',
-            margin: 0,
-            color: tokens.text,
-          }}
+          style={titleStyle}
         >
           {el.text}
         </h1>
       )
-    case 'subtitle':
-      return (
-        <p key={key} {...{ [anim]: '' } as any} style={{ ...style, fontSize: 'clamp(16px, 2vw, 24px)', color: tokens.textMuted, fontWeight: 500 }}>
-          {el.text}
-        </p>
-      )
-    case 'paragraph':
-      return (
-        <p key={key} {...{ [anim]: '' } as any} style={{ ...style, fontSize: 'clamp(15px, 1.6vw, 20px)', lineHeight: 1.6, color: tokens.textMuted, maxWidth: '60ch' }}>
-          {el.text}
-        </p>
-      )
+    }
+    case 'subtitle': {
+      const subStyle: CSSProperties = { fontSize: 'clamp(16px, 2vw, 24px)', color: tokens.textMuted, fontWeight: 500 }
+      if (isEditing) {
+        return (
+          <EditableText
+            value={el.text ?? ''}
+            onChange={handleTextChange}
+            as="p"
+            style={{ ...style, ...subStyle, width: '100%' }}
+          />
+        )
+      }
+      return <p key={key} {...{ [anim]: '' } as any} style={{ ...style, ...subStyle }}>{el.text}</p>
+    }
+    case 'paragraph': {
+      const paraStyle: CSSProperties = { fontSize: 'clamp(15px, 1.6vw, 20px)', lineHeight: 1.6, color: tokens.textMuted, maxWidth: '60ch' }
+      if (isEditing) {
+        return (
+          <EditableText
+            value={el.text ?? ''}
+            onChange={handleTextChange}
+            as="p"
+            style={{ ...style, ...paraStyle, width: '100%' }}
+          />
+        )
+      }
+      return <p key={key} {...{ [anim]: '' } as any} style={{ ...style, ...paraStyle }}>{el.text}</p>
+    }
     case 'bullets':
       return (
         <ul key={key} {...{ [anim]: '' } as any} style={{ ...style, listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -68,7 +132,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
           {el.src ? (
             <img src={el.src} alt={el.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           ) : (
-            <span>🖼 {el.alt || 'Image'}</span>
+            <span>{el.alt || 'Image'}</span>
           )}
           {el.caption && <span style={{ position: 'absolute', bottom: 8, fontSize: 12 }}>{el.caption}</span>}
         </div>
@@ -76,7 +140,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     case 'quote':
       return (
         <blockquote key={key} {...{ [anim]: '' } as any} style={{ ...style, borderLeft: `4px solid ${tokens.accent2}`, paddingLeft: '24px', fontStyle: 'italic', fontSize: 'clamp(20px, 2.6vw, 32px)', lineHeight: 1.4, color: tokens.text }}>
-          “{el.text}”
+          "{el.text}"
           {el.author && <footer style={{ marginTop: '14px', fontSize: '15px', color: tokens.textMuted, fontStyle: 'normal' }}>— {el.author}</footer>}
         </blockquote>
       )
@@ -123,7 +187,6 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     case 'timeline':
     case 'comparison':
     case 'diagram':
-      // Complex elements are rendered by the layout components, not inline.
       return null
     default:
       return null

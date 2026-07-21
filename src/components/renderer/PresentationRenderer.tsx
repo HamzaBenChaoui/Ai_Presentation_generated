@@ -1,6 +1,7 @@
 import type { PresentationSpec } from '../../types'
 import { defaultTokens, tokenFor } from './theme'
 import { useDeckTheme } from './DeckThemeContext'
+import { ActiveSlideIndexProvider } from './ElementRenderer'
 import SlideRenderer from './SlideRenderer'
 
 interface Props {
@@ -29,7 +30,9 @@ export default function PresentationRenderer({ spec, activeIndex, fullscreen }: 
     if (!slide) return null
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <SlideRenderer slide={slide} themeName={spec.meta?.theme} tokens={tokens} />
+        <ActiveSlideIndexProvider slideIndex={activeIndex}>
+          <SlideRenderer slide={slide} themeName={spec.meta?.theme} tokens={tokens} />
+        </ActiveSlideIndexProvider>
       </div>
     )
   }
