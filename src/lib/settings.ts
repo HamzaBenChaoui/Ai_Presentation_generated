@@ -9,6 +9,7 @@ export interface AppSettings {
   defaultTone: string
   defaultLanguage: string
   autosaveDelay: number
+  animationsEnabled: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -17,6 +18,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultTone: 'Professional',
   defaultLanguage: 'English',
   autosaveDelay: 3,
+  animationsEnabled: true,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,6 +56,10 @@ export function getSettings(): AppSettings {
           : parsed.autosaveDelay === 3
             ? 3
             : DEFAULT_SETTINGS.autosaveDelay,
+      animationsEnabled:
+        typeof parsed.animationsEnabled === 'boolean'
+          ? parsed.animationsEnabled
+          : DEFAULT_SETTINGS.animationsEnabled,
     }
   } catch {
     return { ...DEFAULT_SETTINGS }

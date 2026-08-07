@@ -2,6 +2,7 @@ import { useContext, type CSSProperties } from 'react'
 import type { SlideSpec, SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
 import AnimatedElement from './AnimatedElement'
+import MotionItem from './MotionItem'
 import { SlideActiveContext } from './slideContext'
 
 const useSlideActive = () => useContext(SlideActiveContext)
@@ -109,7 +110,7 @@ export function Timeline({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0', marginTop: '10px' }}>
         {items.map((it, i) => (
-          <div key={i} style={{ display: 'flex', gap: '18px', alignItems: 'flex-start' }}>
+          <MotionItem key={i} index={i + 1} style={{ display: 'flex', gap: '18px', alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: tokens.accent, boxShadow: `0 0 14px ${tokens.accent}`, marginTop: '4px' }} />
               {i < items.length - 1 && <div style={{ width: '2px', flex: 1, background: tokens.border, minHeight: '40px' }} />}
@@ -118,7 +119,7 @@ export function Timeline({ slide, tokens = defaultTokens }: LayoutProps) {
               <div style={{ fontFamily: tokens.fontHeading, fontWeight: 700, color: tokens.accent3, fontSize: '16px' }}>{it.year || it.time || ''}</div>
               <div style={{ color: tokens.text, fontSize: '17px' }}>{it.text}</div>
             </div>
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -135,12 +136,12 @@ export function Comparison({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginTop: '8px' }}>
         {[left, right].map((col, ci) => (
-          <div key={ci} style={{ ...card(tokens), borderColor: ci === 1 ? tokens.accent2 : tokens.border }}>
+          <MotionItem key={ci} index={ci + 1} style={{ ...card(tokens), borderColor: ci === 1 ? tokens.accent2 : tokens.border }}>
             <div style={{ fontFamily: tokens.fontHeading, fontWeight: 700, marginBottom: '12px', color: ci === 1 ? tokens.accent2 : tokens.accent }}>{col.title}</div>
             <ul style={{ margin: 0, paddingLeft: '18px', color: tokens.text, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {(col.points || []).map((p: string, i: number) => <li key={i}>{p}</li>)}
             </ul>
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -155,10 +156,10 @@ export function Cards({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '8px' }}>
         {items.map((it, i) => (
-          <div key={i} style={card(tokens)}>
+          <MotionItem key={i} index={i + 1} style={card(tokens)}>
             <div style={{ fontFamily: tokens.fontHeading, fontWeight: 700, fontSize: '18px', marginBottom: '8px', color: tokens.text }}>{it.title}</div>
             <div style={{ color: tokens.textMuted, fontSize: '15px', lineHeight: 1.5 }}>{it.body}</div>
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -173,10 +174,10 @@ export function Statistics({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginTop: '8px' }}>
         {items.map((it, i) => (
-          <div key={i} style={{ ...card(tokens), textAlign: 'center' }}>
+          <MotionItem key={i} index={i + 1} style={{ ...card(tokens), textAlign: 'center' }}>
             <div style={{ fontFamily: tokens.fontHeading, fontWeight: 800, fontSize: 'clamp(30px, 4vw, 48px)', background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{it.value}</div>
             <div style={{ color: tokens.textMuted, marginTop: '6px', fontSize: '15px' }}>{it.label}</div>
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -191,14 +192,14 @@ export function Pricing({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         {items.map((it, i) => (
-          <div key={i} style={{ ...card(tokens), borderColor: it.highlight ? tokens.accent : tokens.border, position: 'relative' }}>
+          <MotionItem key={i} index={i + 1} style={{ ...card(tokens), borderColor: it.highlight ? tokens.accent : tokens.border, position: 'relative' }}>
             {it.highlight && <span style={{ position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`, color: '#fff', fontSize: '11px', fontWeight: 700, padding: '3px 12px', borderRadius: '20px' }}>Popular</span>}
             <div style={{ fontFamily: tokens.fontHeading, fontWeight: 800, fontSize: '22px' }}>{it.title}</div>
             <div style={{ fontFamily: tokens.fontHeading, fontWeight: 800, fontSize: '32px', margin: '10px 0', color: tokens.accent3 }}>{it.price}</div>
             <ul style={{ margin: 0, paddingLeft: '18px', color: tokens.textMuted, display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(it.features || []).map((f: string, fi: number) => <li key={fi}>{f}</li>)}
             </ul>
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -215,9 +216,9 @@ export function Gallery({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
         {cells.map((it: any, i: number) => (
-          <div key={i} style={{ ...card(tokens), minHeight: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.textMuted }}>
+          <MotionItem key={i} index={i + 1} style={{ ...card(tokens), minHeight: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.textMuted }}>
             {it.src ? <img src={it.src} alt={it.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: tokens.radius }} /> : (it.body || it.alt || '🖼')}
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -232,11 +233,11 @@ export function Process({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '8px' }}>
         {items.map((it, i) => (
-          <div key={i} style={{ ...card(tokens), flex: '1 1 160px', minWidth: '160px' }}>
+          <MotionItem key={i} index={i + 1} style={{ ...card(tokens), flex: '1 1 160px', minWidth: '160px' }}>
             <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, marginBottom: '10px' }}>{i + 1}</div>
             <div style={{ fontWeight: 700, marginBottom: '6px', color: tokens.text }}>{it.title || it.text}</div>
             <div style={{ color: tokens.textMuted, fontSize: '14px' }}>{it.body || it.text}</div>
-          </div>
+          </MotionItem>
         ))}
       </div>
     </div>
@@ -251,10 +252,10 @@ export function Flow({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
         {items.map((it, i) => (
-          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <MotionItem key={i} index={i + 1} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ ...card(tokens), padding: '12px 18px', fontWeight: 600, color: tokens.text }}>{it.title || it.text}</span>
             {i < items.length - 1 && <span style={{ color: tokens.accent, fontSize: '20px' }}>→</span>}
-          </span>
+          </MotionItem>
         ))}
       </div>
     </div>

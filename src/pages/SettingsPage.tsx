@@ -308,6 +308,32 @@ export default function SettingsPage() {
               <option value={5}>5 seconds</option>
             </select>
           </div>
+          {/* Animations toggle — accessibility / PDF export / preference */}
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div>
+              <label className="text-sm font-medium text-text">Animations</label>
+              <p className="text-xs text-text-dim mt-0.5">
+                Element entrances and slide transitions. Disable for accessibility,
+                low-power devices, or PDF export.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.animationsEnabled}
+              onClick={() => persist({ animationsEnabled: !settings.animationsEnabled })}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+                settings.animationsEnabled ? 'bg-accent' : 'bg-surface2 border border-border'
+              }`}
+              title={settings.animationsEnabled ? 'Animations on' : 'Animations off'}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
+                  settings.animationsEnabled ? 'left-[22px]' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <Badge variant="default">Defaults apply to the Dashboard generation bar</Badge>

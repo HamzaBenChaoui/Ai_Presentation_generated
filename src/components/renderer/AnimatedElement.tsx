@@ -4,6 +4,7 @@ import type { SpecElement } from './theme'
 import { defaultTokens, type RenderTokens } from './theme'
 import { animations, defaultAnimationFor, type AnimationName } from './animations'
 import ElementRenderer from './ElementRenderer'
+import { getSettings } from '../../lib/settings'
 
 interface Props {
   el: SpecElement
@@ -15,25 +16,58 @@ interface Props {
   active?: boolean
 }
 
+// Per-element stagger delay (seconds) — each subsequent element on a slide
+// waits this much longer before its entrance animation begins.
+const STAGGER_STEP = 0.09
+// Cap so a 10-element slide doesn't take a full second to finish animating.
+const MAX_STAGGER = 0.6
+
 // Wraps each spec element with a Framer Motion entrance animation. The
 // animation is chosen from el.animation, else a positional default. Special
 // treatments: `typing` reveals text character-by-character; `counter`
 // counts a numeric value up from zero.
 export default function AnimatedElement({ el, index, tokens = defaultTokens, active = true }: Props) {
+  const animationsEnabled = getSettings().animationsEnabled
   const name: AnimationName = (el.animation as AnimationName) || defaultAnimationFor(index)
   const controls = useAnimationControls()
 
   useEffect(() => {
+    if (!animationsEnabled) {
+      // Skip the animation entirely; jump to the visible state.
+      controls.start('visible')
+      return
+    }
     if (active) controls.start('visible')
     else controls.start('hidden')
-  }, [active, controls])
+  }, [active, controls, animationsEnabled])
 
-  if (name === 'typing') return <TypingElement el={el} tokens={tokens} active={active} />
-  if (name === 'counter') return <CounterElement el={el} tokens={tokens} active={active} />
+  if (name === 'typing' && animationsEnabled) {
+    return <TypingElement el={el} tokens={tokens} active={active} />
+  }
+  if (name === 'counter' && animationsEnabled) {
+    return <CounterElement el={el} tokens={tokens} active={active} />
+  }
+
+  if (!animationsEnabled) {
+    // No motion wrapper — render the element directly so there is zero
+    // transform/opacity animation overhead (useful for accessibility, PDF
+    // export, and low-power devices).
+    return <ElementRenderer el={el} tokens={tokens} index={index} />
+  }
 
   const variant = animations[name] || animations.fade
+  const delay = Math.min(index * STAGGER_STEP, MAX_STAGGER)
+  const visibleWithDelay = {
+    ...(variant.visible as object),
+    transition: {
+      ...((variant.visible as { transition?: object }).transition || {}),
+      delay,
+    },
+  }
+  const variantWithStagger = { hidden: variant.hidden, visible: visibleWithDelay }
+
   return (
-    <motion.div initial="hidden" animate={controls} variants={variant}>
+    <motion.div initial="hidden" animate={controls} variants={variantWithStagger}>
       <ElementRenderer el={el} tokens={tokens} index={index} />
     </motion.div>
   )
