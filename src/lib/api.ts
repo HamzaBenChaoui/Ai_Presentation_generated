@@ -122,6 +122,9 @@ export const authApi = {
   me(token: string) {
     return request<User>("GET", "/auth/me", undefined, token);
   },
+  updateDisplayName(fullName: string) {
+    return request<User>("PATCH", "/auth/me", { full_name: fullName });
+  },
 };
 
 export { request };

@@ -29,6 +29,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateDisplayName: (fullName: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -85,6 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateDisplayName = async (fullName: string) => {
+    const updated = await authApi.updateDisplayName(fullName.trim());
+    setUser(updated);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -94,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        updateDisplayName,
       }}
     >
       {children}

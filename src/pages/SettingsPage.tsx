@@ -64,23 +64,25 @@ function initials(name: string, email: string): string {
 }
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, updateDisplayName } = useAuth()
   const { mode, setMode } = useTheme()
   const navigate = useNavigate()
   const { toast } = useToast()
 
   const [settings, setSettings] = useState<AppSettings>(getSettings)
   const [displayName, setDisplayName] = useState<string>(
-    getSettings().displayName || user?.display_name || '',
+    user?.display_name ?? '',
   )
+  const [savingName, setSavingName] = useState(false)
+  const [nameDirty, setNameDirty] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
 
   useEffect(() => {
-    if (user?.display_name && !settings.displayName) {
+    if (user?.display_name) {
       setDisplayName(user.display_name)
+      setNameDirty(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.display_name])
 
   const persist = (patch: Partial<AppSettings>) => {
@@ -90,7 +92,22 @@ export default function SettingsPage() {
 
   const handleDisplayNameChange = (value: string) => {
     setDisplayName(value)
-    persist({ displayName: value })
+    setNameDirty(true)
+  }
+
+  const saveDisplayName = async () => {
+    const name = displayName.trim()
+    if (!name) return
+    setSavingName(true)
+    try {
+      await updateDisplayName(name)
+      setNameDirty(false)
+      toast.success('Display name saved to your account.')
+    } catch {
+      toast.error('Failed to save display name.')
+    } finally {
+      setSavingName(false)
+    }
   }
 
   const handleSignOut = async () => {
@@ -172,13 +189,25 @@ export default function SettingsPage() {
             </div>
             <div>
               <p className="text-xs font-medium text-text-muted mb-1">
-                Display name <span className="text-text-dim font-normal">(Saved locally)</span>
+                Display name
               </p>
-              <Input
-                value={displayName}
-                onChange={(e) => handleDisplayNameChange(e.target.value)}
-                placeholder="Your name"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  value={displayName}
+                  onChange={(e) => handleDisplayNameChange(e.target.value)}
+                  placeholder="Your name"
+                  className="flex-1"
+                />
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={saveDisplayName}
+                  disabled={!nameDirty || !displayName.trim()}
+                  loading={savingName}
+                >
+                  Save
+                </Button>
+              </div>
             </div>
             <div>
               <p className="text-xs font-medium text-text-muted mb-1">Account created</p>
@@ -284,7 +313,7 @@ export default function SettingsPage() {
           <Badge variant="default">Defaults apply to the Dashboard generation bar</Badge>
           <button
             className="text-xs text-accent hover:underline cursor-pointer"
-            onClick={() => persist({ ...DEFAULT_SETTINGS, displayName })}
+            onClick={() => persist({ ...DEFAULT_SETTINGS })}
           >
             reset editor preferences
           </button>

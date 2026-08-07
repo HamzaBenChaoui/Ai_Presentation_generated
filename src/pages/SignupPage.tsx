@@ -55,7 +55,7 @@ export default function SignupPage() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="John Doe"
+            placeholder="e.g. Sarah Chen"
             className="h-11 rounded-xl"
           />
         </motion.div>
