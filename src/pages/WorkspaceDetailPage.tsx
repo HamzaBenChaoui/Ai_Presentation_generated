@@ -698,7 +698,7 @@ export default function WorkspaceDetailPage() {
               variant="primary"
               loading={addingPresentation}
               disabled={!selectedPid}
-              onClick={handleAddPresentation}
+              onClick={() => handleAddPresentation()}
             >
               <Plus size={16} />
               Add presentation

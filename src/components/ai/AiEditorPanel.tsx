@@ -1,14 +1,50 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Copy, Check, Send, X, Sparkles, AlertCircle, RotateCcw, Trash2, Undo2, Pencil } from 'lucide-react'
+import { Copy, Check, Send, X, Sparkles, AlertCircle, RotateCcw, Trash2, Undo2, Pencil, BookOpen, PencilLine, PlusCircle, Trash, Palette, Wrench } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '../../lib/cn'
 import { useChat } from './ChatContext'
 import { useEditor } from '../editor/EditorContext'
+import type { ToolStep } from '../../types'
 
 interface Props {
   presentationId: string
   onClose: () => void
+}
+
+// Maps a tool name to an icon + label for the Claude-Code style step display.
+function toolMeta(name: string): { icon: React.ReactNode; label: string } {
+  const n = name.toLowerCase()
+  if (n.includes('read') || n.includes('detail') || n.includes('get')) {
+    return { icon: <BookOpen size={11} />, label: `Reading ${name.replace(/^get_|_detail$/g, '').replace(/_/g, ' ') || 'slide'}...` }
+  }
+  if (n.includes('add')) return { icon: <PlusCircle size={11} />, label: `Adding ${name.replace(/^add_|_detail$/g, '').replace(/_/g, ' ') || 'item'}...` }
+  if (n.includes('delete') || n.includes('remove')) return { icon: <Trash size={11} />, label: `Deleting ${name.replace(/^delete_|_slide$/g, '').replace(/_/g, ' ') || 'item'}...` }
+  if (n.includes('theme')) return { icon: <Palette size={11} />, label: `Applying theme...` }
+  if (n.includes('edit') || n.includes('update') || n.includes('rewrite') || n.includes('reduce')) {
+    return { icon: <PencilLine size={11} />, label: `Editing ${name.replace(/^[a-z]+_/, '').replace(/_/g, ' ') || 'slide'}...` }
+  }
+  return { icon: <Wrench size={11} />, label: `Calling ${name.replace(/_/g, ' ')}...` }
+}
+
+function ToolCallStep({ step }: { step: ToolStep }) {
+  const { icon, label } = toolMeta(step.name)
+  return (
+    <div className="flex items-center gap-1.5 my-1 text-[11px] text-text-dim font-medium">
+      {step.status === 'running' ? (
+        <span className="inline-block w-3 h-3 rounded-full border-2 border-accent/40 border-t-accent animate-spin shrink-0" />
+      ) : (
+        <span className={cn('w-3 h-3 rounded-full grid place-items-center text-white shrink-0', step.status === 'success' ? 'bg-emerald-500/80' : 'bg-red-500/80')}>
+          <span className="text-[8px] leading-none">{step.status === 'success' ? '✓' : '!'}</span>
+        </span>
+      )}
+      <span className="opacity-70">{icon}</span>
+      <span className="flex-1 truncate">{label}</span>
+      {step.status !== 'running' && step.summary ? (
+        <span className="opacity-60 italic truncate max-w-[40%]">{step.summary}</span>
+      ) : null}
+    </div>
+  )
 }
 
 const QUICK_ACTIONS = [
@@ -189,6 +225,13 @@ export default function AiEditorPanel({ presentationId: _presentationId, onClose
           >
             {msg.role === 'assistant' ? (
               <div className="prose prose-xs prose-invert max-w-none [&_p]:m-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:m-0 [&_code]:text-xs [&_pre]:bg-bg [&_pre]:rounded [&_pre]:p-1">
+                {msg.tool_steps && msg.tool_steps.length > 0 && (
+                  <div className="mb-2 pb-2 border-b border-border/50 space-y-0.5">
+                    {msg.tool_steps.map((step, si) => (
+                      <ToolCallStep key={si} step={step} />
+                    ))}
+                  </div>
+                )}
                 <Markdown remarkPlugins={[remarkGfm]}>
                   {msg.content}
                 </Markdown>

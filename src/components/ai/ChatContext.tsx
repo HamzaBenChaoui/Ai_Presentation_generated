@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { chatApi } from '../../lib/api'
-import type { ChatMessage, PresentationSpec } from '../../types'
+import type { ChatMessage, PresentationSpec, ToolStep } from '../../types'
 import { useEditor } from '../editor/EditorContext'
 
 // --- types -------------------------------------------------------------------
@@ -103,6 +103,7 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
     setStreaming(true)
 
     let fullContent = ''
+    const toolSteps: ToolStep[] = []
 
     try {
       const stream = chatApi.stream(presentationId, text, currentSlideIndex)
@@ -118,7 +119,7 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
             const updated = [...prev]
             const last = updated[updated.length - 1]
             if (last?.id === streamPlaceholder.id) {
-              updated[updated.length - 1] = { ...last, content: fullContent }
+              updated[updated.length - 1] = { ...last, content: fullContent, tool_steps: [...toolSteps] }
             }
             return updated
           })
@@ -127,31 +128,37 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
           applyAiEdit(spec)
           onSpecUpdate?.(spec)
         } else if (event === 'tool_call') {
-          // Append tool call info to the placeholder's content
-          const toolInfo = `\n🔧 ${parsed.name}...`
-          fullContent += toolInfo
+          // Push a running step so the frontend shows it immediately, Claude-Code style.
+          toolSteps.push({
+            name: parsed.name,
+            arguments: parsed.arguments ?? {},
+            status: 'running',
+          })
           setMessages(prev => {
             const updated = [...prev]
             const last = updated[updated.length - 1]
             if (last?.id === streamPlaceholder.id) {
-              updated[updated.length - 1] = { ...last, content: fullContent }
+              updated[updated.length - 1] = { ...last, content: fullContent, tool_steps: [...toolSteps] }
             }
             return updated
           })
         } else if (event === 'tool_result') {
-          if (!parsed.success) {
-            fullContent += `\n⚠️ ${parsed.summary}`
-            setMessages(prev => {
-              const updated = [...prev]
-              const last = updated[updated.length - 1]
-              if (last?.id === streamPlaceholder.id) {
-                updated[updated.length - 1] = { ...last, content: fullContent }
-              }
-              return updated
-            })
+          // Mark the matching running step as finished.
+          const step = toolSteps.find(s => s.status === 'running' && s.name === parsed.name)
+          if (step) {
+            step.status = parsed.success ? 'success' : 'error'
+            step.summary = parsed.summary
           }
+          setMessages(prev => {
+            const updated = [...prev]
+            const last = updated[updated.length - 1]
+            if (last?.id === streamPlaceholder.id) {
+              updated[updated.length - 1] = { ...last, content: fullContent, tool_steps: [...toolSteps] }
+            }
+            return updated
+          })
         } else if (event === 'done') {
-          // Replace placeholder with final persisted message
+          // Replace placeholder with final persisted message, keeping tool steps.
           setMessages(prev => {
             const updated = [...prev]
             const last = updated[updated.length - 1]
@@ -160,6 +167,7 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
                 id: parsed.message_id || last.id,
                 role: 'assistant',
                 content: parsed.content || fullContent,
+                tool_steps: toolSteps.length > 0 ? [...toolSteps] : undefined,
                 created_at: new Date().toISOString(),
               }
             }
@@ -168,6 +176,26 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
         } else if (event === 'error') {
           setError(parsed.message || 'AI error')
         }
+      }
+
+      // If the stream ended but a tool step is still "running" (server died/crashed
+      // mid-tool), surface a clear retry state instead of leaving the user to type
+      // "continue" into the void.
+      const stuck = toolSteps.some(s => s.status === 'running')
+      if (stuck) {
+        setMessages(prev => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last?.id === streamPlaceholder.id) {
+            updated[updated.length - 1] = {
+              ...last,
+              content: fullContent,
+              tool_steps: [...toolSteps],
+            }
+          }
+          return updated
+        })
+        setError('The assistant stopped while running a tool. Click retry to continue.')
       }
     } catch (err) {
       if (!mountedRef.current) return

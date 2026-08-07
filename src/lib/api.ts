@@ -510,6 +510,7 @@ export const chatApi = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let pendingEvent = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -519,14 +520,13 @@ export const chatApi = {
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
 
-      let event = "";
       for (const line of lines) {
         if (line.startsWith("event: ")) {
-          event = line.slice(7).trim();
-        } else if (line.startsWith("data: ") && event) {
+          pendingEvent = line.slice(7).trim();
+        } else if (line.startsWith("data: ") && pendingEvent) {
           const data = line.slice(6);
-          yield { event, data };
-          event = "";
+          yield { event: pendingEvent, data };
+          pendingEvent = "";
         }
       }
     }

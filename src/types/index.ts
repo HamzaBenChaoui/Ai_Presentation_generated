@@ -151,11 +151,19 @@ export interface ToolCallInfo {
   arguments: Record<string, any>
 }
 
+export interface ToolStep {
+  name: string
+  arguments: Record<string, any>
+  status: 'running' | 'success' | 'error'
+  summary?: string
+}
+
 export interface ChatMessage {
   id: string
   role: ChatRole
   content: string
   tool_calls?: ToolCallInfo[] | null
+  tool_steps?: ToolStep[] | null
   created_at: string
 }
 
