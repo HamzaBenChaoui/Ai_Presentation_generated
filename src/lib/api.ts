@@ -9,7 +9,7 @@
 
 export const API_BASE = "/api/v1";
 
-import type { Presentation, PresentationList, FileAsset, FileList, Slide, PresentationSpec } from "./../types";
+import type { Presentation, PresentationList, FileAsset, FileList, PresentationSpec, ChatListResponse } from "./../types";
 
 export interface User {
   id: string;
@@ -157,14 +157,12 @@ export interface GenerateRequest {
   tone: string;
   language: string;
   theme: string | null;
+  template_name?: string | null;
 }
 
 export const generationApi = {
   generate(req: GenerateRequest) {
     return request<Presentation>("POST", "/presentations/generate", req);
-  },
-  slides(id: string) {
-    return request<Slide[]>("GET", `/presentations/${id}/slides`);
   },
 };
 
@@ -191,48 +189,6 @@ export interface SpecEditRequest {
 export const aiEditApi = {
   run(id: string, req: SpecEditRequest) {
     return request<SpecEditResponse>("POST", `/presentations/${id}/edit`, req);
-  },
-
-  /** Streaming edit — returns an async iterator of SSE events. */
-  async *stream(id: string, req: SpecEditRequest): AsyncGenerator<{ event: string; data: string }> {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const authToken = getAccessToken();
-    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-
-    const res = await fetch(`${API_BASE}/presentations/${id}/edit/stream`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(req),
-    });
-
-    if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => "");
-      throw new Error(text || `Stream request failed: ${res.status}`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      let event = "";
-      for (const line of lines) {
-        if (line.startsWith("event: ")) {
-          event = line.slice(7).trim();
-        } else if (line.startsWith("data: ") && event) {
-          const data = line.slice(6);
-          yield { event, data };
-          event = "";
-        }
-      }
-    }
   },
 };
 
@@ -291,6 +247,11 @@ async function uploadRequest<T>(path: string, form: FormData): Promise<T> {
   return data as T;
 }
 
+export interface FileUrlResponse {
+  url: string;
+  expires_in: number;
+}
+
 export const filesApi = {
   list() {
     return request<FileList>("GET", "/files");
@@ -302,6 +263,9 @@ export const filesApi = {
   },
   remove(id: string) {
     return request<void>("DELETE", `/files/${id}`);
+  },
+  url(id: string) {
+    return request<FileUrlResponse>("GET", `/files/${id}/url`);
   },
 };
 
@@ -354,7 +318,6 @@ export interface VersionInfo {
   version_note: string | null;
   slide_count: number;
   created_at: string;
-  spec: PresentationSpec | null;
 }
 
 export const versionsApi = {
@@ -422,6 +385,14 @@ export interface WorkspaceMemberInfo {
   user_id: string;
   role: string;
   created_at: string;
+  display_name?: string;
+  email?: string;
+}
+
+export interface UserSearchResult {
+  user_id: string;
+  display_name: string;
+  email: string;
 }
 
 export interface AuditEntry {
@@ -432,6 +403,24 @@ export interface AuditEntry {
   created_at: string;
 }
 
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
+}
+
+export interface PendingInvitation {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
 export const workspacesApi = {
   list() {
     return request<{ workspaces: WorkspaceInfo[] }>("GET", "/workspaces");
@@ -439,11 +428,29 @@ export const workspacesApi = {
   create(name: string) {
     return request<WorkspaceInfo>("POST", "/workspaces", { name });
   },
+  delete(workspaceId: string) {
+    return request<void>("DELETE", `/workspaces/${workspaceId}`);
+  },
   members(workspaceId: string) {
     return request<{ members: WorkspaceMemberInfo[] }>("GET", `/workspaces/${workspaceId}/members`);
   },
-  addMember(workspaceId: string, userId: string, role: string) {
-    return request<WorkspaceMemberInfo>("POST", `/workspaces/${workspaceId}/members`, { user_id: userId, role });
+  inviteMember(workspaceId: string, email: string, role: string) {
+    return request<WorkspaceInvitation>("POST", `/workspaces/${workspaceId}/invitations`, { email, role });
+  },
+  workspaceInvitations(workspaceId: string) {
+    return request<{ invitations: WorkspaceInvitation[] }>("GET", `/workspaces/${workspaceId}/invitations`);
+  },
+  cancelInvitation(workspaceId: string, invitationId: string) {
+    return request<void>("DELETE", `/workspaces/${workspaceId}/invitations/${invitationId}`);
+  },
+  pendingInvitations() {
+    return request<{ invitations: PendingInvitation[] }>("GET", `/workspaces/invitations/pending`);
+  },
+  acceptInvitation(invitationId: string) {
+    return request<WorkspaceMemberInfo>("POST", `/workspaces/invitations/${invitationId}/accept`);
+  },
+  declineInvitation(invitationId: string) {
+    return request<void>("POST", `/workspaces/invitations/${invitationId}/decline`);
   },
   changeRole(workspaceId: string, userId: string, role: string) {
     return request<WorkspaceMemberInfo>("PATCH", `/workspaces/${workspaceId}/members/${userId}`, { role });
@@ -451,10 +458,78 @@ export const workspacesApi = {
   removeMember(workspaceId: string, userId: string) {
     return request<void>("DELETE", `/workspaces/${workspaceId}/members/${userId}`);
   },
+  searchUsers(query: string) {
+    return request<{ users: UserSearchResult[] }>("GET", `/workspaces/search/users?q=${encodeURIComponent(query)}`);
+  },
+  listWorkspacePresentations(workspaceId: string) {
+    return request<{ presentation_ids: string[]; presentations: Presentation[] }>(
+      "GET",
+      `/workspaces/${workspaceId}/presentations`,
+    );
+  },
   addPresentation(workspaceId: string, presentationId: string) {
     return request<{ status: string }>("POST", `/workspaces/${workspaceId}/presentations`, { presentation_id: presentationId });
   },
+  removePresentation(workspaceId: string, presentationId: string) {
+    return request<void>("DELETE", `/workspaces/${workspaceId}/presentations/${presentationId}`);
+  },
   audit(workspaceId: string) {
     return request<{ entries: AuditEntry[] }>("GET", `/workspaces/${workspaceId}/audit`);
+  },
+};
+
+export const chatApi = {
+  list(presentationId: string) {
+    return request<ChatListResponse>("GET", `/presentations/${presentationId}/chat`);
+  },
+
+  /** Streaming chat — returns an async iterator of SSE events. */
+  async *stream(
+    presentationId: string,
+    message: string,
+    currentSlideIndex: number = 0,
+  ): AsyncGenerator<{ event: string; data: string }> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const authToken = getAccessToken();
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+    const res = await fetch(`${API_BASE}/presentations/${presentationId}/chat/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message, current_slide_index: currentSlideIndex }),
+    });
+
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Stream request failed: ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      let event = "";
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          event = line.slice(7).trim();
+        } else if (line.startsWith("data: ") && event) {
+          const data = line.slice(6);
+          yield { event, data };
+          event = "";
+        }
+      }
+    }
+  },
+
+  clear(presentationId: string) {
+    return request<{ message: string }>("DELETE", `/presentations/${presentationId}/chat`);
   },
 };

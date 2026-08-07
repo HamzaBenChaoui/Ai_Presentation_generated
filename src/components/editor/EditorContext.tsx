@@ -1,5 +1,6 @@
 import { createContext, useState, useCallback, useRef, useContext, useEffect, type ReactNode } from 'react'
 import { specApi } from '../../lib/api'
+import { getSettings } from '../../lib/settings'
 import type { PresentationSpec, SlideSpec, SpecElement } from '../../types'
 
 // --- history entry -----------------------------------------------------------
@@ -25,6 +26,7 @@ interface EditorContextValue {
   saveError: string | null
   canUndo: boolean
   canRedo: boolean
+  version: number
   selection: Selection | null
   copiedElement: SpecElement | null
 
@@ -89,10 +91,17 @@ function specHash(spec: PresentationSpec): string {
 interface Props {
   children: ReactNode
   presentationId: string
+  // When provided, the editor seeds from this spec instead of fetching.
+  initialSpec?: PresentationSpec | null
+  // Fired whenever the editor's spec changes (mutations, undo/redo, AI edits).
+  // The page uses this to keep its visible spec in sync.
+  onSpecChange?: (spec: PresentationSpec) => void
+  // Whether inline editing is enabled. False = read-only render.
+  editing?: boolean
 }
 
-export function EditorProvider({ children, presentationId }: Props) {
-  const [spec, setSpec] = useState<PresentationSpec | null>(null)
+export function EditorProvider({ children, presentationId, initialSpec, onSpecChange, editing = true }: Props) {
+  const [spec, setSpec] = useState<PresentationSpec | null>(initialSpec ?? null)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -100,27 +109,50 @@ export function EditorProvider({ children, presentationId }: Props) {
   const [future, setFuture] = useState<HistoryEntry[]>([])
   const [selection, setSelectionState] = useState<Selection | null>(null)
   const [copiedElement, setCopiedElement] = useState<SpecElement | null>(null)
-  const editing = true // EditorProvider always means editing is on
+  const [version, setVersion] = useState(0)
 
   const savedHashRef = useRef<string>('')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pidRef = useRef(presentationId)
+  const onSpecChangeRef = useRef(onSpecChange)
+  const seededRef = useRef(false)
 
-  // --- load spec on mount ---
+  // Keep the latest onSpecChange without re-triggering the seed effect.
+  useEffect(() => { onSpecChangeRef.current = onSpecChange }, [onSpecChange])
+
+  // --- seed from initialSpec OR fetch on mount ---
 
   useEffect(() => {
-    if (presentationId) {
+    if (initialSpec && !seededRef.current) {
+      seededRef.current = true
+      setSpec(initialSpec)
+      setHistory([])
+      setFuture([])
+      setIsDirty(false)
+      savedHashRef.current = specHash(initialSpec)
+    } else if (!initialSpec && presentationId) {
+      seededRef.current = true
       load(presentationId)
     }
-  }, [presentationId])
+  }, [presentationId, initialSpec])
+
+  // --- propagate spec changes to the parent page ---
+  useEffect(() => {
+    if (spec && onSpecChangeRef.current) {
+      onSpecChangeRef.current(spec)
+    }
+  }, [spec])
 
   // --- push to history ---
+
+  const bump = useCallback(() => setVersion(v => v + 1), [])
 
   const pushHistory = useCallback((newSpec: PresentationSpec, note: string) => {
     setHistory(h => [...h, { spec: newSpec, note }])
     setFuture([])
     setIsDirty(true)
-  }, [])
+    bump()
+  }, [bump])
 
   // --- auto-save (debounced 3s) ---
 
@@ -143,7 +175,8 @@ export function EditorProvider({ children, presentationId }: Props) {
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(doSave, 3000)
+    const delay = getSettings().autosaveDelay * 1000
+    saveTimerRef.current = setTimeout(doSave, delay)
   }, [doSave])
 
   // --- mutations ---
@@ -152,31 +185,35 @@ export function EditorProvider({ children, presentationId }: Props) {
     if (!spec) return
     pushHistory(spec, `edit element ${elementIndex} on slide ${slideIndex}`)
     setSpec(patchSlide(spec, slideIndex, { elements: patchElement(spec.slides[slideIndex], elementIndex, patch).elements }))
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const updateSlide = useCallback((slideIndex: number, patch: Partial<SlideSpec>) => {
     if (!spec) return
     pushHistory(spec, `edit slide ${slideIndex}`)
     setSpec(patchSlide(spec, slideIndex, patch))
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const addElement = useCallback((slideIndex: number, element: SpecElement) => {
     if (!spec) return
     pushHistory(spec, `add element to slide ${slideIndex}`)
     const elements = [...(spec.slides[slideIndex]?.elements || []), element]
     setSpec(patchSlide(spec, slideIndex, { elements }))
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const deleteElement = useCallback((slideIndex: number, elementIndex: number) => {
     if (!spec) return
     pushHistory(spec, `delete element ${elementIndex} from slide ${slideIndex}`)
     const elements = spec.slides[slideIndex].elements.filter((_, i) => i !== elementIndex)
     setSpec(patchSlide(spec, slideIndex, { elements }))
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const duplicateElement = useCallback((slideIndex: number, elementIndex: number) => {
     if (!spec) return
@@ -184,16 +221,18 @@ export function EditorProvider({ children, presentationId }: Props) {
     const el = spec.slides[slideIndex].elements[elementIndex]
     const elements = [...spec.slides[slideIndex].elements, el]
     setSpec(patchSlide(spec, slideIndex, { elements }))
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const deleteSlide = useCallback((slideIndex: number) => {
     if (!spec || spec.slides.length <= 1) return
     pushHistory(spec, `delete slide ${slideIndex}`)
     const slides = spec.slides.filter((_, i) => i !== slideIndex)
     setSpec({ ...spec, slides })
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const duplicateSlide = useCallback((slideIndex: number) => {
     if (!spec) return
@@ -202,8 +241,9 @@ export function EditorProvider({ children, presentationId }: Props) {
     const slides = [...spec.slides]
     slides.splice(slideIndex + 1, 0, { ...slide })
     setSpec({ ...spec, slides })
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const updateElementText = useCallback((slideIndex: number, elementIndex: number, text: string) => {
     if (!spec) return
@@ -218,8 +258,9 @@ export function EditorProvider({ children, presentationId }: Props) {
       }
     })
     setSpec({ ...spec, slides })
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   // --- undo / redo ---
 
@@ -229,11 +270,12 @@ export function EditorProvider({ children, presentationId }: Props) {
       const prev = h[h.length - 1]
       setFuture(f => [...f, { spec: spec!, note: 'undo' }]) // eslint-disable-line react-hooks/exhaustive-deps
       setSpec(prev.spec)
+      bump()
       setIsDirty(true)
       scheduleSave()
       return h.slice(0, -1)
     })
-  }, [spec, scheduleSave])
+  }, [spec, scheduleSave, bump])
 
   const redo = useCallback(() => {
     setFuture(f => {
@@ -241,11 +283,12 @@ export function EditorProvider({ children, presentationId }: Props) {
       const next = f[f.length - 1]
       setHistory(h => [...h, { spec: spec!, note: 'redo' }]) // eslint-disable-line react-hooks/exhaustive-deps
       setSpec(next.spec)
+      bump()
       setIsDirty(true)
       scheduleSave()
       return f.slice(0, -1)
     })
-  }, [spec, scheduleSave])
+  }, [spec, scheduleSave, bump])
 
   // --- clipboard ---
 
@@ -261,8 +304,9 @@ export function EditorProvider({ children, presentationId }: Props) {
     pushHistory(spec, 'paste element')
     const elements = [...spec.slides[selection.slideIndex].elements, { ...copiedElement }]
     setSpec(patchSlide(spec, selection.slideIndex, { elements }))
+    bump()
     scheduleSave()
-  }, [copiedElement, selection, spec, pushHistory, scheduleSave])
+  }, [copiedElement, selection, spec, pushHistory, scheduleSave, bump])
 
   const setSelection = useCallback((sel: Selection | null) => setSelectionState(sel), [])
 
@@ -276,21 +320,26 @@ export function EditorProvider({ children, presentationId }: Props) {
     setFuture([])
     setIsDirty(false)
     savedHashRef.current = specHash(data)
-  }, [])
+    bump()
+  }, [bump])
 
   const forceSave = useCallback(() => doSave(), [doSave])
 
   const applyAiEdit = useCallback((newSpec: PresentationSpec) => {
     if (!spec) return
+    // Skip if nothing actually changed (avoids stacking no-op "AI edit" entries).
+    if (specHash(spec) === specHash(newSpec)) return
     pushHistory(spec, 'AI edit')
     setSpec(newSpec)
+    bump()
     scheduleSave()
-  }, [spec, pushHistory, scheduleSave])
+  }, [spec, pushHistory, scheduleSave, bump])
 
   const value: EditorContextValue = {
     spec, isDirty, isSaving, saveError,
     canUndo: history.length > 0,
     canRedo: future.length > 0,
+    version,
     selection, copiedElement,
     editing,
     updateElement, updateSlide, addElement, deleteElement, duplicateElement,

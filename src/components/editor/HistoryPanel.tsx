@@ -57,6 +57,12 @@ export default function HistoryPanel({ presentationId, onRestore }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent2">
+          <Clock size={11} className="text-white" />
+        </span>
+        <span className="text-sm font-semibold text-text">Version History</span>
+      </div>
       {loading ? (
         <div className="flex items-center justify-center flex-1">
           <Loader2 size={18} className="animate-spin text-text-dim" />
@@ -72,8 +78,9 @@ export default function HistoryPanel({ presentationId, onRestore }: Props) {
           {versions.map((v) => (
             <div
               key={v.id}
-              className="flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-surface2 transition-colors group"
+              className="flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-surface2/70 transition-colors group"
             >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-br from-accent to-accent2" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-text truncate">
                   {v.version_note || 'Auto-save'}

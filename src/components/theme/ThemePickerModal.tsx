@@ -52,6 +52,17 @@ function demoSpec(theme: ThemeName): PresentationSpec {
           ] },
         ],
       },
+      {
+        layout: 'timeline',
+        elements: [
+          { type: 'title', text: 'Roadmap', level: 2 },
+          { type: 'timeline', items: [
+            { year: 'Q1', text: 'Research & discovery' },
+            { year: 'Q2', text: 'Prototype & test' },
+            { year: 'Q3', text: 'Launch & scale' },
+          ] },
+        ],
+      },
     ],
   }
 }
@@ -185,16 +196,13 @@ export default function ThemePickerModal({ prompt, slideCount, tone, language, o
 
             {/* Live preview */}
             <div className="flex-1 min-w-0 rounded-xl border border-border overflow-hidden bg-surface">
-              <div className="px-4 py-2.5 border-b border-border">
+              <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
                 <span className="text-xs font-medium text-text-dim">Live Preview</span>
+                <span className="text-xs text-text-dim/70">4 pages · scroll</span>
               </div>
-              <div className="aspect-video overflow-hidden">
+              <div className="h-[480px] overflow-auto p-4">
                 <DeckThemeProvider initial={selected}>
-                  <PresentationRenderer
-                    spec={demo}
-                    activeIndex={0}
-                    fullscreen
-                  />
+                  <PresentationRenderer spec={demo} />
                 </DeckThemeProvider>
               </div>
             </div>

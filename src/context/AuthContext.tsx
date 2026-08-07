@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let refresh: string | null = null;
     try {
       const raw = localStorage.getItem("slideai.refresh_token");
-      refresh = raw ? JSON.parse(raw) : null;
+      refresh = raw;
     } catch {
       refresh = null;
     }

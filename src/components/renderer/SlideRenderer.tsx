@@ -54,11 +54,14 @@ interface Props {
   // animations — only the active slide animates. Defaults to true (stacked
   // view, viewer preview).
   active?: boolean
+  // Fullscreen/present mode: removes the rounded corners and border so the
+  // slide can edge-to-edge cover the viewport.
+  presentation?: boolean
 }
 
 // Renders a single slide. The renderer auto-selects the layout from the
 // spec and applies the slide-level background / theme. 16:9, responsive.
-export default function SlideRenderer({ slide, themeName, background, tokens = defaultTokens, active = true }: Props) {
+export default function SlideRenderer({ slide, themeName, background, tokens = defaultTokens, active = true, presentation = false }: Props) {
   const Layout = slideLayout(slide.layout)
   const tk = tokens || tokenFor(themeName)
   const bg = background || slide.background || undefined
@@ -69,9 +72,9 @@ export default function SlideRenderer({ slide, themeName, background, tokens = d
           width: '100%',
           aspectRatio: '16 / 9',
           maxHeight: '100%',
-          background: bg || 'var(--slide-bg, #0b0b16)',
-          borderRadius: tk.radiusLg,
-          border: `1px solid ${tk.border}`,
+          background: bg || tk.bg,
+          borderRadius: presentation ? 0 : tk.radiusLg,
+          border: presentation ? 'none' : `1px solid ${tk.border}`,
           padding: 'clamp(24px, 4vw, 64px)',
           color: tk.text,
           overflow: 'hidden',

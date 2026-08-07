@@ -8,6 +8,16 @@ interface Props {
   placeholder?: string
 }
 
+/** Escape user-controlled text before injecting via dangerouslySetInnerHTML. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 /**
  * Inline editable text element. Renders as the specified HTML tag with
  * contentEditable. Commits the value to the parent on blur (if changed).
@@ -62,7 +72,7 @@ export default function EditableText({ value, onChange, as: Tag = 'p', style, pl
       contentEditable
       suppressContentEditableWarning
       style={{ ...style, outline: 'none', cursor: 'text', minHeight: '1em' }}
-      dangerouslySetInnerHTML={{ __html: draft || '' }}
+      dangerouslySetInnerHTML={{ __html: escapeHtml(draft) }}
       onFocus={() => { focused.current = true }}
       onBlur={() => { focused.current = false; commit() }}
       onKeyDown={handleKeyDown}

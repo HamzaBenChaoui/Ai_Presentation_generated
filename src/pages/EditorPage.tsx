@@ -11,11 +11,12 @@ import {
   ArrowLeft,
   Undo2,
   Redo2,
-  Pencil,
   Palette,
   Download,
   Play,
   Share2,
+  ImagePlus,
+  Sparkles,
 } from 'lucide-react'
 import { specApi, exportApi, ApiClientError, type ExportFormat } from '../lib/api'
 import type { PresentationSpec } from '../types'
@@ -25,12 +26,15 @@ import { Spinner } from '../components/ui/Spinner'
 import { useToast } from '../components/ui/Toast'
 import { EditorProvider, useEditor } from '../components/editor/EditorContext'
 import { useEditorShortcuts } from '../components/editor/useEditorShortcuts'
+import QuickAiEditModal from '../components/editor/QuickAiEditModal'
 import AiEditorPanel from '../components/ai/AiEditorPanel'
+import { ChatProvider } from '../components/ai/ChatContext'
 import HistoryPanel from '../components/editor/HistoryPanel'
 import ThemeSwitcher from '../components/renderer/ThemeSwitcher'
 import PresentationRenderer from '../components/renderer/PresentationRenderer'
 import FullscreenPlayer from '../components/renderer/FullscreenPlayer'
 import { DeckThemeProvider } from '../components/renderer/DeckThemeContext'
+import ShareModal from '../components/ShareModal'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +48,29 @@ export interface EditorBridgeHandle {
   canUndo: boolean
   canRedo: boolean
   forceSave: () => void
+}
+
+interface ToolbarState {
+  canUndo: boolean
+  canRedo: boolean
+  isDirty: boolean
+  isSaving: boolean
+}
+
+// ---------------------------------------------------------------------------
+// ToolbarStateSync: lives inside EditorProvider and mirrors the editor's
+// undo/redo/save state up to the page-level toolbar. Subscribes to `version`
+// so the toolbar refreshes on every editor change.
+// ---------------------------------------------------------------------------
+
+function ToolbarStateSync({ onChange }: { onChange: (s: ToolbarState) => void }) {
+  const { version, canUndo, canRedo, isDirty, isSaving } = useEditor()
+
+  useEffect(() => {
+    onChange({ canUndo, canRedo, isDirty, isSaving })
+  }, [version, canUndo, canRedo, isDirty, isSaving, onChange])
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -67,12 +94,143 @@ const EditorBridge = forwardRef<EditorBridgeHandle>(function EditorBridge(_props
 })
 
 // ---------------------------------------------------------------------------
-// HistoryWrapper: bridges HistoryPanel restore to EditorContext
+// Canvas: reads the spec from the editor context (single source of truth).
 // ---------------------------------------------------------------------------
+
+function EditorCanvas({ index }: { index: number }) {
+  const { spec } = useEditor()
+  if (!spec) return null
+  return <PresentationRenderer spec={spec} activeIndex={index} fullscreen />
+}
+
+// ---------------------------------------------------------------------------
+// AI panel: shares the same EditorProvider as the canvas (applyAiEdit calls
+// go to the same context that owns the canvas spec).
+// ---------------------------------------------------------------------------
+
+function AiPanel({ presentationId, currentSlideIndex, onClose }: { presentationId: string; currentSlideIndex: number; onClose: () => void }) {
+  return (
+    <ChatProvider presentationId={presentationId} currentSlideIndex={currentSlideIndex}>
+      <div className="h-full">
+        <AiEditorPanel presentationId={presentationId} onClose={onClose} />
+      </div>
+    </ChatProvider>
+  )
+}
 
 function HistoryWrapper({ presentationId }: { presentationId: string }) {
   const { applyAiEdit } = useEditor()
   return <HistoryPanel presentationId={presentationId} onRestore={applyAiEdit} />
+}
+
+// Adds a new image element (src=null) to the current slide and selects it so
+// the "Insert image" action is immediately available on the canvas.
+function AddImageButton({ slideIndex }: { slideIndex: number }) {
+  const { spec, addElement, setSelection } = useEditor()
+  const handleAdd = () => {
+    if (!spec || !spec.slides[slideIndex]) return
+    const elementIndex = spec.slides[slideIndex].elements.length
+    addElement(slideIndex, { type: 'image', src: null, alt: 'Inserted image', caption: null })
+    setSelection({ slideIndex, elementIndex })
+  }
+  return (
+    <Button variant="outline" size="sm" className="w-full" onClick={handleAdd}>
+      <ImagePlus size={14} />
+      Add image
+    </Button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// EditorBody: everything that needs the editor context lives here, inside
+// a SINGLE EditorProvider.
+// ---------------------------------------------------------------------------
+
+interface EditorBodyProps {
+  presentationId: string
+  initialSpec: PresentationSpec
+  index: number
+  inspectorTab: InspectorTab
+  setInspectorTab: (t: InspectorTab) => void
+  onSpecChange: (spec: PresentationSpec) => void
+  onCloseAi: () => void
+  bridgeRef: React.RefObject<EditorBridgeHandle | null>
+  onToolbarState: (s: ToolbarState) => void
+  aiEditOpen: boolean
+  setAiEditOpen: (open: boolean) => void
+}
+
+function EditorBody({
+  presentationId, initialSpec, index, inspectorTab, setInspectorTab,
+  onSpecChange, onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
+}: EditorBodyProps) {
+  return (
+    <EditorProvider
+      presentationId={presentationId}
+      initialSpec={initialSpec}
+      onSpecChange={onSpecChange}
+    >
+      <EditorBridge ref={bridgeRef} />
+      <ToolbarStateSync onChange={onToolbarState} />
+
+      <div className="flex flex-1 min-h-0">
+        {/* ----- Center: Canvas ----- */}
+        <main className="relative flex-1 overflow-hidden bg-bg/40 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_500px_at_50%_-10%,rgba(234,88,12,0.08),transparent_60%)]" />
+          <div className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent2/10 blur-[100px]" />
+          <div className="relative z-10 w-full h-full flex items-center justify-center px-6 py-6">
+            <EditorCanvas index={index} />
+          </div>
+        </main>
+
+        {/* ----- Right: Inspector Panel ----- */}
+        <aside className="w-72 shrink-0 flex flex-col bg-surface/70 backdrop-blur-md border-l border-border">
+          <div className="flex border-b border-border bg-bg/30">
+            {(['theme', 'ai', 'history'] as InspectorTab[]).map((tab) => (
+              <button
+                key={tab}
+                className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-all cursor-pointer ${
+                  inspectorTab === tab
+                    ? 'text-accent bg-gradient-to-b from-accent/15 to-transparent border-b border-accent/30'
+                    : 'text-text-dim hover:text-text'
+                }`}
+                onClick={() => setInspectorTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            {inspectorTab === 'theme' && (
+              <div className="p-3 flex flex-col gap-3">
+                <AddImageButton slideIndex={index} />
+                <ThemeSwitcher />
+              </div>
+            )}
+
+            {inspectorTab === 'ai' && (
+              <AiPanel
+                presentationId={presentationId}
+                currentSlideIndex={index}
+                onClose={onCloseAi}
+              />
+            )}
+
+            {inspectorTab === 'history' && (
+              <HistoryWrapper presentationId={presentationId} />
+            )}
+          </div>
+        </aside>
+      </div>
+
+      <QuickAiEditModal
+        presentationId={presentationId}
+        open={aiEditOpen}
+        onClose={() => setAiEditOpen(false)}
+      />
+    </EditorProvider>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -86,18 +244,30 @@ export default function EditorPage() {
 
   // --- state ----------------------------------------------------------------
 
-  const [spec, setSpec] = useState<PresentationSpec | null>(null)
+  const [initialSpec, setInitialSpec] = useState<PresentationSpec | null>(null)
+  const [liveSpec, setLiveSpec] = useState<PresentationSpec | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
   const [presenting, setPresenting] = useState(false)
-  const [editing, setEditing] = useState(false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('theme')
+  const [aiEditOpen, setAiEditOpen] = useState(false)
+
+  // toolbar undo/redo/save state, mirrored from the editor context
+  const [toolbarState, setToolbarState] = useState<ToolbarState>({
+    canUndo: false,
+    canRedo: false,
+    isDirty: false,
+    isSaving: false,
+  })
 
   // export
   const [exportOpen, setExportOpen] = useState(false)
   const [exporting, setExporting] = useState<ExportFormat | null>(null)
   const exportRef = useRef<HTMLDivElement>(null)
+
+  // share modal
+  const [shareOpen, setShareOpen] = useState(false)
 
   // bridge so the toolbar can reach undo/redo inside EditorProvider
   const editorBridgeRef = useRef<EditorBridgeHandle | null>(null)
@@ -113,7 +283,8 @@ export default function EditorPage() {
       .get(id)
       .then((data) => {
         if (!cancelled) {
-          setSpec(data)
+          setInitialSpec(data)
+          setLiveSpec(data)
           setIndex(0)
         }
       })
@@ -157,7 +328,7 @@ export default function EditorPage() {
         setIndex((i) => Math.max(0, i - 1))
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
-        setIndex((i) => (spec ? Math.min(spec.slides.length - 1, i + 1) : i))
+        setIndex((i) => (liveSpec ? Math.min(liveSpec.slides.length - 1, i + 1) : i))
       } else if (e.key === 'Escape') {
         e.preventDefault()
         navigate('/dashboard')
@@ -165,7 +336,7 @@ export default function EditorPage() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [presenting, spec, navigate])
+  }, [presenting, liveSpec, navigate])
 
   // --- export handler -------------------------------------------------------
 
@@ -187,37 +358,34 @@ export default function EditorPage() {
     [id, toast],
   )
 
-  // --- toggle editing -------------------------------------------------------
-
-  const toggleEditing = useCallback(() => {
-    if (editing && editorBridgeRef.current) {
-      editorBridgeRef.current.forceSave()
-    }
-    setEditing((e) => !e)
-  }, [editing])
-
   // --- render helpers -------------------------------------------------------
 
-  const title = spec?.meta?.title || 'Untitled'
-  const totalSlides = spec?.slides?.length ?? 0
+  const title = liveSpec?.meta?.title || 'Untitled'
+  const totalSlides = liveSpec?.slides?.length ?? 0
 
   // -----------------------------------------------------------------------
   // JSX
   // -----------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-bg text-text">
+    <div className="relative flex flex-col h-screen overflow-hidden bg-bg text-text">
+      {/* Aurora background */}
+      <div className="pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full bg-accent/15 blur-[110px] animate-aurora-1" />
+      <div className="pointer-events-none absolute bottom-0 -left-24 h-80 w-80 rounded-full bg-accent2/15 blur-[110px] animate-aurora-2" />
+
       {/* ====== Top Toolbar ====== */}
-      <header className="flex items-center justify-between h-14 shrink-0 px-3 bg-surface border-b border-border">
+      <header className="relative z-10 flex items-center justify-between h-14 shrink-0 px-3 bg-surface/80 backdrop-blur-md border-b border-border">
         {/* Left group */}
         <div className="flex items-center gap-2 min-w-0">
           <Button variant="ghost" size="icon" title="Back to dashboard" onClick={() => navigate('/dashboard')}>
             <ArrowLeft size={18} />
           </Button>
 
+          <span className="hidden sm:inline-block h-5 w-px bg-border" />
+
           <span
             className="truncate text-sm font-semibold text-text max-w-xs"
-            contentEditable={editing}
+            contentEditable
             suppressContentEditableWarning
           >
             {title}
@@ -225,53 +393,68 @@ export default function EditorPage() {
         </div>
 
         {/* Right group */}
-        <div className="flex items-center gap-2">
-          {/* Undo */}
+        <div className="flex items-center gap-1.5">
           <Button
             variant="ghost"
             size="icon"
             title="Undo"
-            disabled={!editing || !editorBridgeRef.current?.canUndo}
+            disabled={!toolbarState.canUndo}
             onClick={() => editorBridgeRef.current?.undo()}
           >
             <Undo2 size={16} />
           </Button>
 
-          {/* Redo */}
           <Button
             variant="ghost"
             size="icon"
             title="Redo"
-            disabled={!editing || !editorBridgeRef.current?.canRedo}
+            disabled={!toolbarState.canRedo}
             onClick={() => editorBridgeRef.current?.redo()}
           >
             <Redo2 size={16} />
           </Button>
 
-          {/* Edit toggle */}
-          <Button variant="ghost" size="sm" title="Toggle edit mode" onClick={toggleEditing}>
-            <Pencil size={14} />
-            <span>{editing ? 'Editing' : 'Edit'}</span>
+          <span className="mx-1 h-5 w-px bg-border" />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Quick AI edit"
+            className="rounded-xl text-accent hover:text-accent hover:bg-accent/10"
+            onClick={() => setAiEditOpen(true)}
+          >
+            <Sparkles size={14} />
+            <span>AI Edit</span>
           </Button>
 
-          {/* Theme -- switches inspector to theme tab */}
-          <Button variant="ghost" size="icon" title="Deck theme" onClick={() => setInspectorTab('theme')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Deck theme"
+            className="rounded-xl"
+            onClick={() => setInspectorTab('theme')}
+          >
             <Palette size={16} />
           </Button>
 
-          {/* Export */}
           <div className="relative" ref={exportRef}>
-            <Button variant="outline" size="sm" title="Export" onClick={() => setExportOpen((o) => !o)}>
+            <Button
+              variant="outline"
+              size="sm"
+              title="Export"
+              className="rounded-xl"
+              onClick={() => setExportOpen((o) => !o)}
+            >
               <Download size={14} />
               <span>Export</span>
             </Button>
 
             {exportOpen && (
-              <div className="absolute top-full mt-1 right-0 z-50 min-w-[160px] rounded-lg border border-border bg-surface p-1 shadow-lg">
+              <div className="absolute top-full mt-1 right-0 z-50 min-w-[160px] rounded-xl border border-border bg-surface p-1 shadow-xl shadow-black/20">
                 {(['html', 'pdf', 'pptx'] as ExportFormat[]).map((fmt) => (
                   <button
                     key={fmt}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm rounded text-text hover:bg-surface2 transition-colors disabled:opacity-50"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm rounded-lg text-text hover:bg-surface2 transition-colors disabled:opacity-50"
                     disabled={exporting !== null}
                     onClick={() => handleExport(fmt)}
                   >
@@ -283,153 +466,114 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* Present */}
-          <Button variant="primary" size="sm" title="Present" onClick={() => setPresenting(true)}>
+          <Button
+            size="sm"
+            title="Present"
+            className="rounded-xl bg-gradient-to-r from-accent to-accent2 text-white shadow-md shadow-accent/30 hover:from-accent hover:to-accent2 hover:shadow-lg hover:shadow-accent/40"
+            onClick={() => setPresenting(true)}
+          >
             <Play size={14} />
             <span>Present</span>
           </Button>
 
-          {/* Share (placeholder) */}
           <Button
             variant="ghost"
             size="icon"
             title="Share"
-            onClick={() => console.log('Share placeholder -- TODO')}
+            className="rounded-xl"
+            onClick={() => setShareOpen(true)}
           >
             <Share2 size={16} />
           </Button>
         </div>
       </header>
 
-      {/* ====== Main body (3-column) ====== */}
-      <div className="flex flex-1 min-h-0">
+      {/* ====== Main body ====== */}
+      {loading && (
+        <div className="flex-1 flex items-center justify-center bg-bg">
+          <div className="flex flex-col items-center gap-3">
+            <Spinner size="lg" />
+            <span className="text-sm text-text-muted">Loading presentation...</span>
+          </div>
+        </div>
+      )}
 
-        {/* ----- Left: Slide Navigator ----- */}
-        <aside className="w-48 shrink-0 overflow-y-auto bg-surface border-r border-border p-2 flex flex-col gap-1.5">
-          {!spec || !spec.slides ? (
-            <div className="flex items-center justify-center flex-1">
-              <Spinner />
-            </div>
+      {error && (
+        <div className="flex-1 flex items-center justify-center bg-bg">
+          <div className="flex flex-col items-center gap-4">
+            <span className="text-sm text-danger">{error}</span>
+            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && initialSpec && (
+        <DeckThemeProvider initial={initialSpec.meta?.theme as ThemeName | null}>
+          {presenting && liveSpec ? (
+            <FullscreenPlayer spec={liveSpec} onExit={() => setPresenting(false)} />
           ) : (
-            spec.slides.map((_slide, i) => (
-              <button
-                key={i}
-                className={`h-12 w-full rounded border text-xs transition-colors cursor-pointer ${
-                  i === index
-                    ? 'border-accent ring-1 ring-accent/20 bg-surface2 text-text'
-                    : 'border-border bg-surface2 text-text-dim hover:border-accent'
-                }`}
-                onClick={() => setIndex(i)}
-              >
-                Slide {i + 1}
-              </button>
-            ))
-          )}
-        </aside>
+            <>
+              {/* Left: Slide Navigator (outside EditorProvider — only needs liveSpec) */}
+              <div className="flex flex-1 min-h-0">
+                <aside className="relative z-10 w-48 shrink-0 overflow-y-auto bg-surface/70 backdrop-blur-md border-r border-border p-2 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 px-1 pt-1 pb-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-dim">Slides</span>
+                    <span className="ml-auto text-[10px] tabular-nums text-text-dim">{totalSlides}</span>
+                  </div>
+                  {liveSpec?.slides?.map((_slide, i) => (
+                    <button
+                      key={i}
+                      className={`h-14 w-full rounded-xl border text-xs font-medium transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        i === index
+                          ? 'border-accent/40 bg-gradient-to-br from-accent/15 to-accent2/10 text-accent ring-1 ring-accent/25 shadow-md shadow-accent/10'
+                          : 'border-border bg-surface2/60 text-text-dim hover:border-accent/40 hover:text-text'
+                      }`}
+                      onClick={() => setIndex(i)}
+                    >
+                      <span>Slide {i + 1}</span>
+                      <span className="h-1 w-6 rounded-full overflow-hidden bg-bg/60">
+                        <span
+                          className="block h-full rounded-full bg-gradient-to-r from-accent to-accent2 transition-all duration-300"
+                          style={{ width: i === index ? '100%' : '0%' }}
+                        />
+                      </span>
+                    </button>
+                  ))}
+                </aside>
 
-        {/* ----- Center: Canvas ----- */}
-        <main className="flex-1 overflow-hidden bg-bg flex items-center justify-center">
-          {loading && (
-            <div className="flex flex-col items-center gap-3">
-              <Spinner size="lg" />
-              <span className="text-sm text-text-muted">Loading presentation...</span>
-            </div>
-          )}
-
-          {error && (
-            <div className="flex flex-col items-center gap-4">
-              <span className="text-sm text-danger">{error}</span>
-              <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')}>
-                Back to Dashboard
-              </Button>
-            </div>
-          )}
-
-          {!loading && !error && spec && (
-            <DeckThemeProvider initial={spec.meta?.theme as ThemeName | null}>
-              {presenting ? (
-                <FullscreenPlayer
-                  spec={spec}
-                  onExit={() => setPresenting(false)}
+                {/* Single EditorProvider owns the spec for canvas + AI + history.
+                 * liveSpec is mirrored from the editor via onSpecChange so the
+                 * slide navigator and present mode stay in sync too. */}
+                <EditorBody
+                  presentationId={id!}
+                  initialSpec={initialSpec}
+                  index={index}
+                  inspectorTab={inspectorTab}
+                  setInspectorTab={setInspectorTab}
+                  onSpecChange={setLiveSpec}
+                  onCloseAi={() => setInspectorTab('theme')}
+                  bridgeRef={editorBridgeRef}
+                  onToolbarState={setToolbarState}
+                  aiEditOpen={aiEditOpen}
+                  setAiEditOpen={setAiEditOpen}
                 />
-              ) : editing ? (
-                <EditorProvider presentationId={id!}>
-                  <EditorBridge ref={editorBridgeRef} />
-                  <PresentationRenderer
-                    spec={spec}
-                    activeIndex={index}
-                    fullscreen
-                  />
-                </EditorProvider>
-              ) : (
-                <PresentationRenderer
-                  spec={spec}
-                  activeIndex={index}
-                  fullscreen
-                />
-              )}
-            </DeckThemeProvider>
+              </div>
+            </>
           )}
-        </main>
-
-        {/* ----- Right: Inspector Panel ----- */}
-        <aside className="w-72 shrink-0 flex flex-col bg-surface border-l border-border">
-          {/* Tab header */}
-          <div className="flex border-b border-border">
-            {(['theme', 'ai', 'history'] as InspectorTab[]).map((tab) => (
-              <button
-                key={tab}
-                className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-colors ${
-                  inspectorTab === tab
-                    ? 'text-accent bg-accent/10 border-b border-accent/20'
-                    : 'text-text-dim hover:text-text'
-                }`}
-                onClick={() => setInspectorTab(tab)}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 overflow-hidden">
-            {inspectorTab === 'theme' && (
-              <div className="p-3">
-                <ThemeSwitcher />
-              </div>
-            )}
-
-            {inspectorTab === 'ai' && editing && (
-              <EditorProvider presentationId={id!}>
-                <div className="h-full">
-                  <AiEditorPanel presentationId={id!} onClose={() => setInspectorTab('theme')} />
-                </div>
-              </EditorProvider>
-            )}
-
-            {inspectorTab === 'ai' && !editing && (
-              <div className="flex items-center justify-center h-full">
-                <span className="text-xs text-text-dim text-center px-4">
-                  Enable Edit mode to use the AI assistant.
-                </span>
-              </div>
-            )}
-
-            {inspectorTab === 'history' && (
-              <EditorProvider presentationId={id!}>
-                <HistoryWrapper presentationId={id!} />
-              </EditorProvider>
-            )}
-          </div>
-        </aside>
-      </div>
+        </DeckThemeProvider>
+      )}
 
       {/* ====== Slide counter (bottom-left overlay) ====== */}
-      {!loading && !error && spec && totalSlides > 0 && (
+      {!loading && !error && liveSpec && totalSlides > 0 && (
         <div className="fixed bottom-3 left-52 z-10 text-xs text-text-dim tabular-nums pointer-events-none">
           {index + 1} / {totalSlides}
         </div>
       )}
+
+      {/* ====== Share Modal ====== */}
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} presentationId={id!} />
     </div>
   )
 }

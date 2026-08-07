@@ -1,9 +1,12 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
 import { useEditor } from '../editor/EditorContext'
 import EditableText from '../editor/EditableText'
+import ImagePickerModal from '../editor/ImagePickerModal'
+import { Image as ImageIcon } from 'lucide-react'
 
 /** Simple context to pass the current slide index down to ElementRenderer. */
 const ActiveSlideIndex = createContext(0)
@@ -25,6 +28,17 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
   try { editorCtx = useEditor() } catch { /* not in editor */ }
   const slideIndex = useActiveSlideIndex()
   const isEditing = editorCtx?.editing === true && (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph')
+  const [imagePickerOpen, setImagePickerOpen] = useState(false)
+
+  // The `index` prop is the position within the same element type group; the
+  // real array index is needed for selection + updateElement.
+  const realIndex =
+    editorCtx?.spec?.slides[slideIndex]?.elements.indexOf(el) ?? index
+
+  const isSelected =
+    editorCtx?.editing === true &&
+    editorCtx.selection?.slideIndex === slideIndex &&
+    editorCtx.selection?.elementIndex === realIndex
 
   const handleTextChange = (newText: string) => {
     if (editorCtx) {
@@ -126,17 +140,78 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
           ))}
         </ul>
       )
-    case 'image':
+    case 'image': {
+      const showInsert = editorCtx?.editing === true && (!el.src || isSelected)
       return (
-        <div key={key} {...{ [anim]: '' } as any} style={{ borderRadius: tokens.radiusLg, overflow: 'hidden', border: `1px solid ${tokens.border}`, background: tokens.surface2, minHeight: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.textMuted, fontStyle: 'italic' }}>
+        <div
+          key={key}
+          {...{ [anim]: '' } as any}
+          onClick={() => {
+            if (editorCtx?.editing) editorCtx.setSelection({ slideIndex, elementIndex: realIndex })
+          }}
+          style={{
+            position: 'relative',
+            borderRadius: tokens.radiusLg,
+            overflow: 'hidden',
+            border: isSelected ? `2px solid ${tokens.accent}` : `1px solid ${tokens.border}`,
+            background: tokens.surface2,
+            minHeight: '160px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: tokens.textMuted,
+            fontStyle: 'italic',
+            cursor: editorCtx?.editing ? 'pointer' : 'default',
+          }}
+        >
           {el.src ? (
             <img src={el.src} alt={el.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           ) : (
             <span>{el.alt || 'Image'}</span>
           )}
+          {showInsert && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setImagePickerOpen(true)
+              }}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'rgba(0,0,0,0.65)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <ImageIcon size={14} />
+              {el.src ? 'Replace' : 'Insert image'}
+            </button>
+          )}
           {el.caption && <span style={{ position: 'absolute', bottom: 8, fontSize: 12 }}>{el.caption}</span>}
+          {imagePickerOpen &&
+            createPortal(
+              <ImagePickerModal
+                open={imagePickerOpen}
+                onClose={() => setImagePickerOpen(false)}
+                onInsert={(src, alt) => {
+                  editorCtx?.updateElement(slideIndex, realIndex, { src, alt })
+                  setImagePickerOpen(false)
+                }}
+              />,
+              document.body,
+            )}
         </div>
       )
+    }
     case 'quote':
       return (
         <blockquote key={key} {...{ [anim]: '' } as any} style={{ ...style, borderLeft: `4px solid ${tokens.accent2}`, paddingLeft: '24px', fontStyle: 'italic', fontSize: 'clamp(20px, 2.6vw, 32px)', lineHeight: 1.4, color: tokens.text }}>

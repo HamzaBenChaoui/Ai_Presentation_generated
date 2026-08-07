@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles,
-  Plus,
   ChevronDown,
   ChevronUp,
   Trash2,
@@ -11,8 +10,12 @@ import {
   Presentation as PresentationIcon,
   Upload,
   FileIcon,
+  ArrowRight,
+  LayoutDashboard,
+  FileText,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import ThemePickerModal from '../components/theme/ThemePickerModal'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -21,12 +24,14 @@ import { Badge } from '../components/ui/Badge'
 import { Skeleton } from '../components/ui/Skeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { useToast } from '../components/ui/Toast'
+import { useAuth } from '../context/AuthContext'
 import {
   presentationsApi,
   filesApi,
   ApiClientError,
 } from '../lib/api'
 import type { Presentation, FileAsset } from '../types'
+import { getSettings } from '../lib/settings'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -67,14 +72,43 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// ── Animation variants ──────────────────────────────────────────────────────
+// ── Primitives (mêmes que la home) ─────────────────────────────────────────
+
+const easeOut = [0.22, 1, 0.36, 1] as const
+
+function SpotlightCard({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ x: -200, y: -200 })
+
+  function onMove(e: React.MouseEvent) {
+    const rect = ref.current?.getBoundingClientRect()
+    if (!rect) return
+    setPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+  }
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      className={`group relative overflow-hidden rounded-2xl border border-border bg-surface/80 backdrop-blur-sm ${className}`}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(360px circle at ${pos.x}px ${pos.y}px, rgba(234,88,12,0.10), transparent 60%)`,
+        }}
+      />
+      {children}
+    </div>
+  )
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.05, duration: 0.3, ease: 'easeOut' },
+    transition: { delay: i * 0.05, duration: 0.35, ease: easeOut },
   }),
 }
 
@@ -83,15 +117,17 @@ const fadeUp = {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user } = useAuth()
   const toastRef = useRef(toast)
   toastRef.current = toast
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Generation state
   const [prompt, setPrompt] = useState('')
-  const [slideCount, setSlideCount] = useState(10)
-  const [tone, setTone] = useState('Professional')
-  const [language, setLanguage] = useState('English')
+  const initialSettings = getSettings()
+  const [slideCount, setSlideCount] = useState(initialSettings.defaultSlideCount)
+  const [tone, setTone] = useState(initialSettings.defaultTone)
+  const [language, setLanguage] = useState(initialSettings.defaultLanguage)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showThemePicker, setShowThemePicker] = useState(false)
 
@@ -104,6 +140,9 @@ export default function DashboardPage() {
 
   // Hover state per card
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  // Delete confirmation
+  const [pendingDelete, setPendingDelete] = useState<Presentation | null>(null)
 
   // ── Fetch on mount ──────────────────────────────────────────────────────
 
@@ -144,19 +183,12 @@ export default function DashboardPage() {
     setShowThemePicker(true)
   }
 
-  async function handleCreateNew() {
+  async function confirmDelete() {
+    if (!pendingDelete) return
     try {
-      const created = await presentationsApi.create('Untitled Presentation')
-      navigate(`/editor/${created.id}`)
-    } catch (err) {
-      if (err instanceof ApiClientError) toast.error(err.message)
-    }
-  }
-
-  async function handleDelete(id: string) {
-    if (!window.confirm('Delete this presentation?')) return
-    try {
-      await presentationsApi.remove(id)
+      await presentationsApi.remove(pendingDelete.id)
+      toast.success('Presentation deleted')
+      setPendingDelete(null)
       loadPresentations()
     } catch (err) {
       if (err instanceof ApiClientError) toast.error(err.message)
@@ -176,16 +208,76 @@ export default function DashboardPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const firstName = (user?.display_name || user?.email || '').split(/[\s@]/)[0]
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col gap-8 pb-12">
-      {/* ── 1. Generation Bar ──────────────────────────────────────────── */}
-      <section className="sticky top-0 z-20 -mt-6 pt-6 pb-4 bg-bg/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-3xl mx-auto w-full">
+    <div className="relative flex flex-col gap-8 pb-12">
+      {/* Aurora background (page-level, subtil) */}
+      <div className="pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full bg-accent/15 blur-[110px] animate-aurora-1" />
+      <div className="pointer-events-none absolute top-40 -left-24 h-80 w-80 rounded-full bg-accent2/15 blur-[110px] animate-aurora-2" />
+
+      {/* ── 1. Header ──────────────────────────────────────────────────── */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: easeOut }}
+        className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            <LayoutDashboard size={13} />
+            Dashboard
+          </span>
+          <h1 className="mt-1.5 font-[family-name:var(--font-display)] text-3xl font-bold text-text">
+            Welcome back,{' '}
+            <span className="bg-gradient-to-r from-accent to-accent2 bg-clip-text text-transparent text-shimmer">
+              {firstName || 'there'}
+            </span>
+          </h1>
+          <p className="mt-1.5 text-sm text-text-muted">
+            Describe an idea below and let AI turn it into a polished deck.
+          </p>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1, ease: easeOut }}
+          className="flex shrink-0 items-center gap-3"
+        >
+          <div className="flex flex-col items-center rounded-2xl border border-border bg-surface/70 px-5 py-2.5 backdrop-blur-sm">
+            <span className="font-[family-name:var(--font-display)] text-xl font-bold text-text tabular-nums">
+              {presentations.length}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-text-dim">
+              <PresentationIcon size={11} />
+              Decks
+            </span>
+          </div>
+          <div className="flex flex-col items-center rounded-2xl border border-border bg-surface/70 px-5 py-2.5 backdrop-blur-sm">
+            <span className="font-[family-name:var(--font-display)] text-xl font-bold text-text tabular-nums">
+              {files.length}
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-text-dim">
+              <FileText size={11} />
+              Files
+            </span>
+          </div>
+        </motion.div>
+      </motion.section>
+
+      {/* ── 2. Generation Bar ──────────────────────────────────────────── */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.15, ease: easeOut }}
+      >
+        <SpotlightCard className="p-5">
           <Textarea
-            placeholder="Describe your presentation..."
-            className="min-h-[60px] resize-none"
+            placeholder="Describe your presentation…"
+            className="min-h-[64px] resize-none rounded-xl"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
@@ -199,7 +291,7 @@ export default function DashboardPage() {
               <button
                 key={q.label}
                 type="button"
-                className="rounded-full border border-border px-3 py-1 text-xs text-text-muted hover:bg-surface2 hover:text-text transition-colors cursor-pointer"
+                className="rounded-full border border-border px-3 py-1 text-xs text-text-muted hover:border-accent/40 hover:text-accent hover:bg-accent/5 transition-colors cursor-pointer"
                 onClick={() => setPrompt(q.prompt)}
               >
                 {q.label}
@@ -208,8 +300,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Controls row */}
-          <div className="flex items-center justify-between gap-3 mt-3">
-            {/* Left: Advanced toggle + optional fields */}
+          <div className="flex items-center justify-between gap-3 mt-4">
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <button
                 type="button"
@@ -253,30 +344,37 @@ export default function DashboardPage() {
               </AnimatePresence>
             </div>
 
-            {/* Right: Generate button */}
             <Button
               variant="primary"
               size="lg"
               disabled={!prompt.trim()}
               onClick={handleGenerate}
+              className="group relative overflow-hidden"
             >
               <Sparkles size={18} />
               Generate
+              <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
             </Button>
           </div>
-        </div>
-      </section>
+        </SpotlightCard>
+      </motion.section>
 
-      {/* ── 2. Decks Grid ────────────────────────────────────────────────── */}
-      <section>
+      {/* ── 3. Decks Grid ────────────────────────────────────────────────── */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.25, ease: easeOut }}
+        className="relative"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-text font-[family-name:var(--font-display)]">
-            My Presentations
-          </h2>
-          <Button variant="ghost" size="sm" onClick={handleCreateNew}>
-            <Plus size={16} />
-            New
-          </Button>
+          <div>
+            <h2 className="font-[family-name:var(--font-display)] text-lg font-semibold text-text">
+              My Presentations
+            </h2>
+            <p className="text-xs text-text-dim mt-0.5">
+              {presentations.length} deck{presentations.length === 1 ? '' : 's'} · click to edit
+            </p>
+          </div>
         </div>
 
         {loadingDecks ? (
@@ -314,73 +412,91 @@ export default function DashboardPage() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   layout
                 >
-                  <Card className="relative p-0 overflow-hidden cursor-pointer group">
-                    <div
-                      onMouseEnter={() => setHoveredId(deck.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                      onClick={() => navigate(`/editor/${deck.id}`)}
+                  <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.25, ease: easeOut }}>
+                    <Card
+                      hoverable
+                      className="relative p-0 overflow-hidden cursor-pointer group h-full"
                     >
-                    {/* Thumbnail */}
-                    <div
-                      className="h-[140px] relative"
-                      style={{ background: GRADIENTS[i % GRADIENTS.length] }}
-                    >
-                      <span className="absolute inset-0 flex items-center justify-center text-white/90 font-semibold text-lg font-[family-name:var(--font-display)]">
-                        {deck.slide_count} slides
-                      </span>
+                      <div
+                        onMouseEnter={() => setHoveredId(deck.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                        onClick={() => navigate(`/editor/${deck.id}`)}
+                        className="h-full"
+                      >
+                        {/* Thumbnail */}
+                        <div
+                          className="h-[140px] relative"
+                          style={{ background: GRADIENTS[i % GRADIENTS.length] }}
+                        >
+                          <div
+                            className="absolute inset-0 opacity-40 transition-opacity duration-500 group-hover:opacity-60"
+                            style={{
+                              background:
+                                'radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,0.25), transparent 60%)',
+                            }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-white/90 font-semibold text-lg font-[family-name:var(--font-display)]">
+                            {deck.slide_count} slides
+                          </span>
 
-                      {/* Hover overlay */}
-                      <AnimatePresence>
-                        {hoveredId === deck.id && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              className="rounded-lg bg-white/90 p-2 text-text hover:bg-white transition-colors cursor-pointer"
-                              title="Open"
-                              onClick={() => navigate(`/editor/${deck.id}`)}
-                            >
-                              <ExternalLink size={16} />
-                            </button>
-                            <button
-                              className="rounded-lg bg-white/90 p-2 text-danger hover:bg-white transition-colors cursor-pointer"
-                              title="Delete"
-                              onClick={() => handleDelete(deck.id)}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                          {/* Hover overlay */}
+                          <AnimatePresence>
+                            {hoveredId === deck.id && (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2 backdrop-blur-[2px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  className="rounded-lg bg-white/90 p-2 text-text hover:bg-white transition-colors cursor-pointer"
+                                  title="Open"
+                                  onClick={() => navigate(`/editor/${deck.id}`)}
+                                >
+                                  <ExternalLink size={16} />
+                                </button>
+                                <button
+                                  className="rounded-lg bg-white/90 p-2 text-danger hover:bg-white transition-colors cursor-pointer"
+                                  title="Delete"
+                                  onClick={() => setPendingDelete(deck)}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
 
-                    {/* Info */}
-                    <div className="p-3">
-                      <p className="font-medium text-sm text-text line-clamp-2 leading-snug">
-                        {deck.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <Badge variant="accent">{deck.slide_count} slides</Badge>
-                        <span className="text-xs text-text-dim">
-                          Updated {timeAgo(deck.updated_at)}
-                        </span>
+                        {/* Info */}
+                        <div className="p-3">
+                          <p className="font-medium text-sm text-text line-clamp-2 leading-snug">
+                            {deck.title}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <Badge variant="accent">{deck.slide_count} slides</Badge>
+                            <span className="text-xs text-text-dim">
+                              Updated {timeAgo(deck.updated_at)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    </div>
-                  </Card>
+                    </Card>
+                  </motion.div>
                 </motion.div>
               ))}
             </AnimatePresence>
           </motion.div>
         )}
-      </section>
+      </motion.section>
 
-      {/* ── 3. Files Panel ───────────────────────────────────────────────── */}
-      <section className="border-t border-border pt-6">
+      {/* ── 4. Files Panel ───────────────────────────────────────────────── */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.35, ease: easeOut }}
+        className="relative border-t border-border pt-6"
+      >
         <div className="flex items-center justify-between mb-4">
           <button
             type="button"
@@ -440,17 +556,19 @@ export default function DashboardPage() {
                       initial="hidden"
                       animate="visible"
                     >
-                      <Card className="p-3 flex flex-col gap-2">
+                      <SpotlightCard className="p-3 flex flex-col gap-2">
                         <div className="flex items-center gap-2">
-                          <FileIcon size={16} className="text-text-muted shrink-0" />
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
+                            <FileIcon size={15} />
+                          </div>
                           <span className="text-sm text-text truncate">{file.filename}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 pl-10">
                           <Badge variant="default">{file.content_type ?? 'file'}</Badge>
                           <span className="text-xs text-text-dim">{formatFileSize(file.size_bytes)}</span>
                         </div>
-                        <span className="text-xs text-text-dim">{timeAgo(file.created_at)}</span>
-                      </Card>
+                        <span className="pl-10 text-xs text-text-dim">{timeAgo(file.created_at)}</span>
+                      </SpotlightCard>
                     </motion.div>
                   ))}
                 </div>
@@ -458,7 +576,7 @@ export default function DashboardPage() {
             </motion.div>
           )}
         </AnimatePresence>
-      </section>
+      </motion.section>
 
       {/* Theme picker overlay */}
       <AnimatePresence>
@@ -472,6 +590,19 @@ export default function DashboardPage() {
           />
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete presentation"
+        message={
+          pendingDelete
+            ? `"${pendingDelete.title}" will be permanently deleted. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   )
 }

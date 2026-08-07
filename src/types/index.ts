@@ -1,4 +1,4 @@
-export type ThemeMode = 'dark' | 'light'
+export type ThemeMode = 'dark' | 'light' | 'system'
 
 export interface ColorPalette {
   bg: string
@@ -85,14 +85,6 @@ export interface FileList {
   total: number
 }
 
-export interface Slide {
-  index: number
-  title: string
-  bullets: string[]
-  notes: string | null
-  layout: string
-}
-
 // --- Phase 7: Presentation Specification (structured, not HTML) ---
 
 export type LayoutName =
@@ -148,4 +140,26 @@ export interface PresentationMeta {
 export interface PresentationSpec {
   meta: PresentationMeta
   slides: SlideSpec[]
+}
+
+// --- Chat ---
+
+export type ChatRole = 'user' | 'assistant'
+
+export interface ToolCallInfo {
+  name: string
+  arguments: Record<string, any>
+}
+
+export interface ChatMessage {
+  id: string
+  role: ChatRole
+  content: string
+  tool_calls?: ToolCallInfo[] | null
+  created_at: string
+}
+
+export interface ChatListResponse {
+  messages: ChatMessage[]
+  total: number
 }

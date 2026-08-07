@@ -10,6 +10,12 @@ interface Props {
   onExit: () => void
 }
 
+// Base slide design size. The active slide is scaled dynamically so it always
+// COVERS the full viewport (no margins, no background bars visible) while
+// content scales proportionally, exactly like PowerPoint/Google Slides.
+const BASE_W = 1920
+const BASE_H = 1080
+
 // Direction-aware slide transitions
 const slideVariants: Record<string, Variants> = {
   forward: {
@@ -26,10 +32,19 @@ const slideVariants: Record<string, Variants> = {
 
 const slideTransition = { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const }
 
+// Cover-fit scale: grow the 16:9 slide so it fills every corner of the
+// viewport, cropping only the excess (no letterboxing / visible background).
+function coverScale(vw: number, vh: number) {
+  return Math.max(vw / BASE_W, vh / BASE_H)
+}
+
 export default function FullscreenPlayer({ spec, onExit }: Props) {
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
   const [isFs, setIsFs] = useState(false)
+  const [scale, setScale] = useState(() =>
+    coverScale(window.innerWidth, window.innerHeight),
+  )
   const containerRef = useRef<HTMLDivElement>(null)
   const total = spec.slides.length
 
@@ -45,6 +60,18 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
   const goNext = useCallback(() => go(index + 1), [go, index])
   const goPrev = useCallback(() => go(index - 1), [go, index])
 
+  // Track viewport size (native fullscreen changes it too) and recompute the
+  // cover scale so the slide always fills the whole screen.
+  useEffect(() => {
+    const recompute = () => setScale(coverScale(window.innerWidth, window.innerHeight))
+    window.addEventListener('resize', recompute)
+    document.addEventListener('fullscreenchange', recompute)
+    return () => {
+      window.removeEventListener('resize', recompute)
+      document.removeEventListener('fullscreenchange', recompute)
+    }
+  }, [])
+
   const toggleFullscreen = useCallback(() => {
     const el = containerRef.current
     if (!el) return
@@ -52,6 +79,21 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
       el.requestFullscreen?.().catch(() => {})
     } else {
       document.exitFullscreen?.().catch(() => {})
+    }
+  }, [])
+
+  // Auto-enter native fullscreen when Present is clicked. The fullscreen
+  // element is this player container itself (slide + controls only — never the
+  // app sidebar/toolbar), so the API fills the physical screen with the slide.
+  useEffect(() => {
+    const el = containerRef.current
+    if (el && !document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {})
+    }
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {})
+      }
     }
   }, [])
 
@@ -135,71 +177,69 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
   const tokens = tokenFor(spec.meta?.theme)
   const progressPct = total ? ((index + 1) / total) * 100 : 0
 
-  const controlBtnClass = (disabled: boolean) =>
-    `p-2 rounded-lg border transition-colors ${
-      disabled
-        ? 'border-border text-text-dim cursor-default pointer-events-none'
-        : 'border-border text-text hover:text-accent hover:border-accent cursor-pointer'
-    }`
-
   return (
     <div
       ref={containerRef}
       onClick={onPointer}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
-      className="fixed inset-0 z-[5000] flex flex-col select-none cursor-pointer"
-      style={{ background: tokens.bg }}
+      className="fixed inset-0 z-[5000] w-screen h-screen overflow-hidden select-none cursor-pointer bg-bg"
     >
-      {/* Slide stage */}
-      <div className="flex-1 flex items-center justify-center p-[clamp(16px,3vw,48px)] min-h-0 overflow-hidden">
+      {/* Slide stage — covers the entire viewport, slide is cover-scaled */}
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={index}
             custom={direction}
             variants={slideVariants[direction]}
             transition={slideTransition}
-            className="w-full flex items-center justify-center"
-            style={{ maxWidth: 'min(1100px, 92vw)', height: '100%' }}
+            style={{ width: BASE_W * scale, height: BASE_H * scale }}
           >
-            <SlideRenderer
-              slide={spec.slides[index]}
-              themeName={spec.meta?.theme}
-              tokens={tokens}
-              active
-            />
+            <div
+              style={{
+                width: BASE_W,
+                height: BASE_H,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              <SlideRenderer
+                slide={spec.slides[index]}
+                themeName={spec.meta?.theme}
+                tokens={tokens}
+                active
+                presentation
+              />
+            </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Controls overlay */}
+      {/* Controls overlay — floats above the slide, never steals layout space */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex items-center justify-between gap-3 px-5 py-3"
-        style={{ color: tokens.textMuted }}
+        className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 px-5 py-3 bg-gradient-to-t from-black/60 to-transparent text-text-dim"
       >
         <button
           onClick={goPrev}
           disabled={index === 0}
-          className={controlBtnClass(index === 0)}
+          className={`p-2 rounded-lg border transition-colors bg-surface/40 backdrop-blur-sm ${
+            index === 0
+              ? 'border-border text-text-dim cursor-default pointer-events-none'
+              : 'border-border text-text hover:text-accent hover:border-accent cursor-pointer'
+          }`}
         >
           <ChevronLeft size={18} />
         </button>
 
         <div className="flex-1 flex items-center gap-3">
-          <span className="text-xs tabular-nums whitespace-nowrap" style={{ color: tokens.textMuted }}>
+          <span className="text-xs tabular-nums whitespace-nowrap text-white/80">
             {total ? `${index + 1} / ${total}` : '0 / 0'}
           </span>
-          <div
-            className="flex-1 h-1 rounded-full overflow-hidden"
-            style={{ background: tokens.surface2 }}
-          >
+          <div className="flex-1 h-1 rounded-full overflow-hidden bg-white/20">
             <div
-              className="h-full rounded-full transition-[width] duration-300 ease-out"
-              style={{
-                width: `${progressPct}%`,
-                background: `linear-gradient(90deg, ${tokens.accent}, ${tokens.accent2})`,
-              }}
+              className="h-full rounded-full transition-[width] duration-300 ease-out bg-gradient-to-r from-accent to-accent2"
+              style={{ width: `${progressPct}%` }}
             />
           </div>
         </div>
@@ -208,23 +248,25 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
           <button
             onClick={toggleFullscreen}
             title="Fullscreen (F)"
-            className="p-2 rounded-lg border border-border cursor-pointer transition-colors hover:text-accent"
-            style={{ color: tokens.textMuted }}
+            className="p-2 rounded-lg border border-border bg-surface/40 backdrop-blur-sm text-text cursor-pointer transition-colors hover:text-accent hover:border-accent"
           >
             {isFs ? <Minimize size={16} /> : <Maximize size={16} />}
           </button>
           <button
             onClick={onExit}
             title="Exit (Esc)"
-            className="p-2 rounded-lg border border-border cursor-pointer transition-colors hover:text-accent"
-            style={{ color: tokens.textMuted }}
+            className="p-2 rounded-lg border border-border bg-surface/40 backdrop-blur-sm text-text cursor-pointer transition-colors hover:text-accent hover:border-accent"
           >
             <X size={18} />
           </button>
           <button
             onClick={goNext}
             disabled={index >= total - 1}
-            className={controlBtnClass(index >= total - 1)}
+            className={`p-2 rounded-lg border transition-colors bg-surface/40 backdrop-blur-sm ${
+              index >= total - 1
+                ? 'border-border text-text-dim cursor-default pointer-events-none'
+                : 'border-border text-text hover:text-accent hover:border-accent cursor-pointer'
+            }`}
           >
             <ChevronRight size={18} />
           </button>

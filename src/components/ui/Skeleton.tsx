@@ -1,22 +1,26 @@
-import { useTheme } from '../../context/ThemeContext'
+import { cn } from '../../lib/cn'
 
-interface Props {
+interface SkeletonProps {
   width?: string | number
   height?: string | number
   borderRadius?: string | number
+  className?: string
 }
 
-export default function Skeleton({ width = '100%', height = '16px', borderRadius = 8 }: Props) {
-  const { colors } = useTheme()
+export function Skeleton({
+  width = '100%',
+  height = '16px',
+  borderRadius = 8,
+  className,
+}: SkeletonProps) {
   return (
     <div
+      className={cn('animate-pulse bg-surface2 rounded', className)}
       style={{
         width,
         height,
         borderRadius,
-        background: `linear-gradient(90deg, ${colors.surface2} 25%, ${colors.border} 50%, ${colors.surface2} 75%)`,
         backgroundSize: '200% 100%',
-        animation: 'skeleton-shimmer 1.5s ease-in-out infinite',
       }}
     />
   )
