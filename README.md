@@ -28,41 +28,20 @@ React 19 · TypeScript · Vite 7 · Tailwind v4 · Framer Motion
 
 ## 🖼️ Screenshots
 
-### Home / Landing
-![Home](screenshots/01-home.png)
+### Landing
+![Home](screenshots/home.png)
 
-### Authentication
-![Login / Signup](screenshots/02-login-signup.png)
+### Dashboard — AI generation bar + recent decks
+![Dashboard](screenshots/dashboard.png)
 
-### Dashboard
-![Dashboard](screenshots/03-dashboard.png)
+### Editor — hero slide with inspector panel
+![Editor](screenshots/editor.png)
 
-### Theme picker (live preview before generation)
-![Theme picker](screenshots/04-theme-picker.png)
+### Editor — statistics slide + AI chat agent
+![Editor with AI](screenshots/editor-ai.png)
 
-### Editor — hero slide
-![Editor hero](screenshots/05-editor.png)
-
-### Editor — statistics slide + AI panel
-![Editor statistics with AI](screenshots/06-editor-statistics-ai.png)
-
-### Editor — comparison slide
-![Editor comparison](screenshots/12-editor-comparison.png)
-
-### Present mode (fullscreen, cover-scaled)
-![Present](screenshots/07-present.png)
-
-### Templates browser
-![Templates](screenshots/08-templates.png)
-
-### Assets library
-![Assets](screenshots/09-assets.png)
-
-### Workspaces
-![Workspaces](screenshots/10-workspaces.png)
-
-### Settings
-![Settings](screenshots/11-settings.png)
+### Present mode — fullscreen, cover-scaled slides
+![Present](screenshots/present.png)
 
 ---
 
