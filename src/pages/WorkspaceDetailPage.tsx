@@ -108,6 +108,8 @@ export default function WorkspaceDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<WorkspaceMemberInfo | null>(null)
   const [pendingDelete, setPendingDelete] = useState(false)
+  const [pendingLeave, setPendingLeave] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const [cancellingInvitationId, setCancellingInvitationId] = useState<string | null>(null)
 
   // Add member form (search by name/email)
@@ -329,6 +331,25 @@ export default function WorkspaceDetailPage() {
     setPendingDelete(true)
   }
 
+  const handleLeaveWorkspace = () => {
+    setPendingLeave(true)
+  }
+
+  const confirmLeaveWorkspace = async () => {
+    if (!id) return
+    try {
+      setLeaving(true)
+      await workspacesApi.leaveWorkspace(id)
+      toast.success('You left the workspace')
+      navigate('/workspaces')
+    } catch (err) {
+      if (err instanceof ApiClientError) toast.error(err.message)
+    } finally {
+      setLeaving(false)
+      setPendingLeave(false)
+    }
+  }
+
   const confirmDeleteWorkspace = async () => {
     if (!id) return
     try {
@@ -423,6 +444,11 @@ export default function WorkspaceDetailPage() {
                 You are the owner
               </Badge>
             )}
+            {!isOwner && (
+              <Badge variant="default">
+                Member
+              </Badge>
+            )}
             {isOwner && (
               <Button
                 variant="destructive"
@@ -432,6 +458,16 @@ export default function WorkspaceDetailPage() {
               >
                 <Trash2 size={14} />
                 Delete workspace
+              </Button>
+            )}
+            {!isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLeaveWorkspace}
+              >
+                <X size={14} />
+                Leave workspace
               </Button>
             )}
           </div>
@@ -831,6 +867,16 @@ export default function WorkspaceDetailPage() {
         loading={deleting}
         onConfirm={confirmDeleteWorkspace}
         onCancel={() => setPendingDelete(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingLeave}
+        title="Leave workspace"
+        message={`You will leave "${workspaceName ?? 'This workspace'}" and lose access to its presentations and members.`}
+        confirmLabel="Leave"
+        loading={leaving}
+        onConfirm={confirmLeaveWorkspace}
+        onCancel={() => setPendingLeave(false)}
       />
     </div>
   )

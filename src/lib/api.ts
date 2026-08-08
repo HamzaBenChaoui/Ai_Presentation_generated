@@ -381,6 +381,7 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   created_at: string;
+  role?: string;
 }
 
 export interface WorkspaceMemberInfo {
@@ -460,6 +461,9 @@ export const workspacesApi = {
   },
   removeMember(workspaceId: string, userId: string) {
     return request<void>("DELETE", `/workspaces/${workspaceId}/members/${userId}`);
+  },
+  leaveWorkspace(workspaceId: string) {
+    return request<void>("POST", `/workspaces/${workspaceId}/leave`);
   },
   searchUsers(query: string) {
     return request<{ users: UserSearchResult[] }>("GET", `/workspaces/search/users?q=${encodeURIComponent(query)}`);

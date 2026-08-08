@@ -353,17 +353,19 @@ export default function WorkspacesPage() {
                       </div>
                       <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-3">
                         <Badge variant="default">Workspace</Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Delete workspace"
-                          disabled={deletingId === ws.id}
-                          loading={deletingId === ws.id}
-                          onClick={() => setPendingDelete(ws)}
-                        >
-                          <Trash2 size={15} />
-                        </Button>
+                        {ws.role === 'owner' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Delete workspace"
+                            disabled={deletingId === ws.id}
+                            loading={deletingId === ws.id}
+                            onClick={() => setPendingDelete(ws)}
+                          >
+                            <Trash2 size={15} />
+                          </Button>
+                        )}
                       </div>
                     </SpotlightCard>
                   </motion.div>

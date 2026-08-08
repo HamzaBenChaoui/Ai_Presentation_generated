@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { Modal } from '../components/ui/Modal'
+import { Spinner } from '../components/ui/Spinner'
 import ThemePickerModal from '../components/theme/ThemePickerModal'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -70,6 +72,65 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function isImageContentType(contentType: string | null): boolean {
+  if (!contentType) return false
+  return contentType.startsWith('image/')
+}
+
+function FileThumb({ file, onClick }: { file: FileAsset; onClick?: () => void }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!isImageContentType(file.content_type)) return
+    let cancelled = false
+    filesApi
+      .url(file.id)
+      .then((res) => {
+        if (!cancelled) setUrl(res.url)
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [file.id, file.content_type])
+
+  if (!isImageContentType(file.content_type)) {
+    return (
+      <div className="flex h-24 items-center justify-center rounded-lg bg-accent/10 text-accent">
+        <FileIcon size={22} />
+      </div>
+    )
+  }
+
+  if (failed) {
+    return (
+      <div className="flex h-24 items-center justify-center rounded-lg bg-accent/10 text-accent">
+        <FileIcon size={22} />
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-24 w-full overflow-hidden rounded-lg bg-border/40 text-left cursor-pointer transition-opacity hover:opacity-90"
+      aria-label={`View ${file.filename}`}
+    >
+      {url ? (
+        <img src={url} alt={file.filename} className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <div className="flex h-full items-center justify-center text-text-dim">
+          <FileIcon size={22} />
+        </div>
+      )}
+    </button>
+  )
 }
 
 // ── Primitives (mêmes que la home) ─────────────────────────────────────────
@@ -144,6 +205,12 @@ export default function DashboardPage() {
   // Delete confirmation
   const [pendingDelete, setPendingDelete] = useState<Presentation | null>(null)
 
+  // My Files: full-image preview + delete confirmation
+  const [previewFile, setPreviewFile] = useState<FileAsset | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [pendingFileDelete, setPendingFileDelete] = useState<FileAsset | null>(null)
+  const [deletingFile, setDeletingFile] = useState(false)
+
   // ── Fetch on mount ──────────────────────────────────────────────────────
 
   const loadPresentations = useCallback(async () => {
@@ -206,6 +273,31 @@ export default function DashboardPage() {
       if (err instanceof ApiClientError) toast.error(err.message)
     }
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function openPreview(file: FileAsset) {
+    setPreviewFile(file)
+    setPreviewUrl(null)
+    filesApi
+      .url(file.id)
+      .then((res) => setPreviewUrl(res.url))
+      .catch(() => toast.error('Could not load image'))
+  }
+
+  async function confirmFileDelete() {
+    if (!pendingFileDelete) return
+    try {
+      setDeletingFile(true)
+      await filesApi.remove(pendingFileDelete.id)
+      setPreviewFile((cur) => (cur?.id === pendingFileDelete.id ? null : cur))
+      toast.success('File deleted')
+      setPendingFileDelete(null)
+      loadFiles()
+    } catch (err) {
+      if (err instanceof ApiClientError) toast.error(err.message)
+    } finally {
+      setDeletingFile(false)
+    }
   }
 
   const firstName = (user?.display_name || user?.email || '').split(/[\s@]/)[0]
@@ -557,17 +649,23 @@ export default function DashboardPage() {
                       animate="visible"
                     >
                       <SpotlightCard className="p-3 flex flex-col gap-2">
+                        <FileThumb file={file} onClick={() => openPreview(file)} />
                         <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
-                            <FileIcon size={15} />
-                          </div>
                           <span className="text-sm text-text truncate">{file.filename}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPendingFileDelete(file)}
+                            className="ml-auto shrink-0 rounded-md p-1 text-text-muted transition-colors hover:bg-danger/10 hover:text-danger cursor-pointer"
+                            aria-label={`Delete ${file.filename}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
-                        <div className="flex items-center gap-2 pl-10">
+                        <div className="flex items-center gap-2">
                           <Badge variant="default">{file.content_type ?? 'file'}</Badge>
                           <span className="text-xs text-text-dim">{formatFileSize(file.size_bytes)}</span>
                         </div>
-                        <span className="pl-10 text-xs text-text-dim">{timeAgo(file.created_at)}</span>
+                        <span className="text-xs text-text-dim">{timeAgo(file.created_at)}</span>
                       </SpotlightCard>
                     </motion.div>
                   ))}
@@ -602,6 +700,41 @@ export default function DashboardPage() {
         confirmLabel="Delete"
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <Modal
+        open={previewFile !== null}
+        onClose={() => setPreviewFile(null)}
+        title={previewFile?.filename}
+        className="max-w-3xl"
+      >
+        <div className="flex items-center justify-center">
+          {previewUrl ? (
+            <img
+              src={previewUrl}
+              alt={previewFile?.filename ?? ''}
+              className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain"
+            />
+          ) : (
+            <div className="flex h-40 items-center justify-center text-text-dim">
+              <Spinner />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={pendingFileDelete !== null}
+        title="Delete file"
+        message={
+          pendingFileDelete
+            ? `"${pendingFileDelete.filename}" will be permanently deleted. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        loading={deletingFile}
+        onConfirm={confirmFileDelete}
+        onCancel={() => setPendingFileDelete(null)}
       />
     </div>
   )

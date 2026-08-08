@@ -55,7 +55,7 @@ export default function SignupPage() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="e.g. Sarah Chen"
+            placeholder="Slide AI"
             className="h-11 rounded-xl"
           />
         </motion.div>
