@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   Undo2,
   Redo2,
-  Palette,
   Download,
   Play,
   Share2,
@@ -30,7 +29,6 @@ import QuickAiEditModal from '../components/editor/QuickAiEditModal'
 import AiEditorPanel from '../components/ai/AiEditorPanel'
 import { ChatProvider } from '../components/ai/ChatContext'
 import HistoryPanel from '../components/editor/HistoryPanel'
-import ThemeSwitcher from '../components/renderer/ThemeSwitcher'
 import PresentationRenderer from '../components/renderer/PresentationRenderer'
 import FullscreenPlayer from '../components/renderer/FullscreenPlayer'
 import { DeckThemeProvider } from '../components/renderer/DeckThemeContext'
@@ -40,7 +38,7 @@ import ShareModal from '../components/ShareModal'
 // Types
 // ---------------------------------------------------------------------------
 
-type InspectorTab = 'theme' | 'ai' | 'history'
+type InspectorTab = 'ai' | 'history'
 
 // --- Resizable inspector sidebar --------------------------------------------
 const INSPECTOR_WIDTH_KEY = 'slideai.inspector.width'
@@ -269,8 +267,12 @@ function EditorBody({
           className="shrink-0 flex flex-col bg-surface/70 backdrop-blur-md border-l border-border"
           style={{ width: inspectorWidth }}
         >
+          <div className="p-3 border-b border-border">
+            <AddImageButton slideIndex={index} />
+          </div>
+
           <div className="flex border-b border-border bg-bg/30">
-            {(['theme', 'ai', 'history'] as InspectorTab[]).map((tab) => (
+            {(['ai', 'history'] as InspectorTab[]).map((tab) => (
               <button
                 key={tab}
                 className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-all cursor-pointer ${
@@ -286,13 +288,6 @@ function EditorBody({
           </div>
 
           <div className="flex-1 overflow-hidden">
-            {inspectorTab === 'theme' && (
-              <div className="p-3 flex flex-col gap-3">
-                <AddImageButton slideIndex={index} />
-                <ThemeSwitcher />
-              </div>
-            )}
-
             {inspectorTab === 'ai' && (
               <AiPanel
                 presentationId={presentationId}
@@ -334,7 +329,7 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
   const [presenting, setPresenting] = useState(false)
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('theme')
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('ai')
   const [aiEditOpen, setAiEditOpen] = useState(false)
   const [accessRole, setAccessRole] = useState<string | null>(null)
 
@@ -525,16 +520,6 @@ export default function EditorPage() {
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            title="Deck theme"
-            className="rounded-xl"
-            onClick={() => setInspectorTab('theme')}
-          >
-            <Palette size={16} />
-          </Button>
-
           <div className="relative" ref={exportRef}>
             <Button
               variant="outline"
@@ -651,7 +636,7 @@ export default function EditorPage() {
                   inspectorTab={inspectorTab}
                   setInspectorTab={setInspectorTab}
                   onSpecChange={setLiveSpec}
-                  onCloseAi={() => setInspectorTab('theme')}
+                  onCloseAi={() => setInspectorTab('history')}
                   bridgeRef={editorBridgeRef}
                   onToolbarState={setToolbarState}
                   aiEditOpen={aiEditOpen}
