@@ -625,7 +625,10 @@ export default function WorkspaceDetailPage() {
               {members.map((m) => {
                 const isSelf = user !== null && m.user_id === user.id
                 const isOwnerMember = m.role === 'owner'
-                const canChangeRole = !isOwnerMember && !(isOwner && isSelf)
+                // Only owner/admin (isManager) can manage members at all.
+                // The owner row is never editable; the manager cannot drop
+                // their own owner role either.
+                const canManage = isManager && !isOwnerMember && !(isOwner && isSelf)
                 return (
                   <SpotlightCard key={m.id} className="flex items-center gap-3 p-3.5">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent2 text-xs font-bold text-white">
@@ -642,7 +645,7 @@ export default function WorkspaceDetailPage() {
                     </div>
                     <Badge variant={roleVariant(m.role)}>{m.role}</Badge>
 
-                    {canChangeRole && (
+                    {canManage && (
                       <select
                         value={m.role}
                         disabled={changingRoleId === m.id}
@@ -657,15 +660,17 @@ export default function WorkspaceDetailPage() {
                       </select>
                     )}
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title={isOwnerMember ? 'Cannot remove the owner' : 'Remove member'}
-                      disabled={isOwnerMember || removingId === m.id}
-                      onClick={() => handleRemoveMember(m)}
-                    >
-                      <X size={16} />
-                    </Button>
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={isOwnerMember ? 'Cannot remove the owner' : 'Remove member'}
+                        disabled={isOwnerMember || removingId === m.id}
+                        onClick={() => handleRemoveMember(m)}
+                      >
+                        <X size={16} />
+                      </Button>
+                    )}
                   </SpotlightCard>
                 )
               })}

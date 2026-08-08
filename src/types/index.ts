@@ -61,6 +61,7 @@ export interface Presentation {
   theme: string | null
   created_at: string
   updated_at: string
+  access_role?: string | null
 }
 
 export interface PresentationList {
@@ -168,4 +169,6 @@ export interface ChatMessage {
 export interface ChatListResponse {
   messages: ChatMessage[]
   total: number
+  /** Caller's effective role: owner | admin | editor | viewer | null */
+  access_role?: string | null
 }

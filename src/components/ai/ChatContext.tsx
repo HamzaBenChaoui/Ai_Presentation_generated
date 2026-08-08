@@ -18,6 +18,10 @@ interface ChatContextValue {
   loading: boolean
   streaming: boolean
   error: string | null
+  /** Caller's role on this presentation. Drives UI affordances (viewers = read-only). */
+  accessRole: string | null
+  /** True when the caller can edit (owner/admin/editor). False for viewers. */
+  canEdit: boolean
   send: (text: string) => Promise<void>
   editMessage: (msgId: string, newText: string) => Promise<void>
   clear: () => Promise<void>
@@ -49,7 +53,10 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [accessRole, setAccessRole] = useState<string | null>(null)
   const { applyAiEdit } = useEditor()
+
+  const canEdit = accessRole === 'owner' || accessRole === 'admin' || accessRole === 'editor'
 
   const lastUserTextRef = useRef<string>('')
   const mountedRef = useRef(true)
@@ -62,6 +69,7 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
     try {
       const res = await chatApi.list(presentationId)
       setMessages(res.messages)
+      setAccessRole(res.access_role ?? null)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load chat')
@@ -174,7 +182,19 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
             return updated
           })
         } else if (event === 'error') {
-          setError(parsed.message || 'AI error')
+          // Surface a friendly explanation when the backend reports the
+          // caller has read-only access, instead of a raw JSON blob.
+          const raw = String(parsed.message || '')
+          const isForbidden =
+            raw.includes('read-only') ||
+            raw.includes('view-only') ||
+            /forbidden/i.test(raw) ||
+            raw.startsWith('{')
+          setError(
+            isForbidden
+              ? '⚠️ You have view-only access to this presentation. Ask me a question instead, or ask an editor to make changes for you.'
+              : raw || 'AI error',
+          )
         }
       }
 
@@ -261,7 +281,7 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
 
   return (
     <ChatContext.Provider
-      value={{ messages, loading, streaming, error, send, editMessage, clear, retryLast, reload }}
+      value={{ messages, loading, streaming, error, accessRole, canEdit, send, editMessage, clear, retryLast, reload }}
     >
       {children}
     </ChatContext.Provider>

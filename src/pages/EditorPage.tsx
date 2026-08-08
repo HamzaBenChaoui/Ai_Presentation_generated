@@ -18,7 +18,7 @@ import {
   ImagePlus,
   Sparkles,
 } from 'lucide-react'
-import { specApi, exportApi, ApiClientError, type ExportFormat } from '../lib/api'
+import { specApi, exportApi, presentationsApi, ApiClientError, type ExportFormat } from '../lib/api'
 import type { PresentationSpec } from '../types'
 import type { ThemeName } from '../components/renderer/theme'
 import { Button } from '../components/ui/Button'
@@ -252,6 +252,7 @@ export default function EditorPage() {
   const [presenting, setPresenting] = useState(false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('theme')
   const [aiEditOpen, setAiEditOpen] = useState(false)
+  const [accessRole, setAccessRole] = useState<string | null>(null)
 
   // toolbar undo/redo/save state, mirrored from the editor context
   const [toolbarState, setToolbarState] = useState<ToolbarState>({
@@ -296,6 +297,14 @@ export default function EditorPage() {
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
+    // The caller's role over this presentation (owner/admin/editor can edit;
+    // viewers are read-only and should not see the Quick AI edit entry points).
+    presentationsApi
+      .get(id)
+      .then((data) => {
+        if (!cancelled) setAccessRole(data.access_role ?? null)
+      })
+      .catch(() => { /* role is non-critical; defaults to edit-enabled */ })
     return () => { cancelled = true }
   }, [id])
 
@@ -362,6 +371,9 @@ export default function EditorPage() {
 
   const title = liveSpec?.meta?.title || 'Untitled'
   const totalSlides = liveSpec?.slides?.length ?? 0
+  // Viewers are read-only: hide every editing entry point (Quick AI edit
+  // button + AI inspector tab) so the UI matches their permissions.
+  const canEdit = accessRole === null || accessRole === 'owner' || accessRole === 'admin' || accessRole === 'editor'
 
   // -----------------------------------------------------------------------
   // JSX
@@ -416,16 +428,18 @@ export default function EditorPage() {
 
           <span className="mx-1 h-5 w-px bg-border" />
 
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Quick AI edit"
-            className="rounded-xl text-accent hover:text-accent hover:bg-accent/10"
-            onClick={() => setAiEditOpen(true)}
-          >
-            <Sparkles size={14} />
-            <span>AI Edit</span>
-          </Button>
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Quick AI edit"
+              className="rounded-xl text-accent hover:text-accent hover:bg-accent/10"
+              onClick={() => setAiEditOpen(true)}
+            >
+              <Sparkles size={14} />
+              <span>AI Edit</span>
+            </Button>
+          )}
 
           <Button
             variant="ghost"

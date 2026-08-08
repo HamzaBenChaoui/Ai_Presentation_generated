@@ -59,7 +59,7 @@ const QUICK_ACTIONS = [
 ]
 
 export default function AiEditorPanel({ presentationId: _presentationId, onClose }: Props) {
-  const { messages, loading, streaming, error, send, editMessage, clear, retryLast } = useChat()
+  const { messages, loading, streaming, error, send, editMessage, clear, retryLast, canEdit, accessRole } = useChat()
   const { undo, canUndo } = useEditor()
   const [input, setInput] = useState('')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
@@ -155,14 +155,16 @@ export default function AiEditorPanel({ presentationId: _presentationId, onClose
           <span className="text-sm font-semibold text-text">Slide AI</span>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={undo}
-            disabled={!canUndo || streaming}
-            className="text-text-dim hover:text-text transition-colors cursor-pointer p-1 disabled:opacity-30 disabled:cursor-default"
-            title="Undo last AI edit"
-          >
-            <Undo2 size={14} />
-          </button>
+          {canEdit && (
+            <button
+              onClick={undo}
+              disabled={!canUndo || streaming}
+              className="text-text-dim hover:text-text transition-colors cursor-pointer p-1 disabled:opacity-30 disabled:cursor-default"
+              title="Undo last AI edit"
+            >
+              <Undo2 size={14} />
+            </button>
+          )}
           <button
             onClick={clear}
             className="text-text-dim hover:text-text transition-colors cursor-pointer p-1"
@@ -179,23 +181,32 @@ export default function AiEditorPanel({ presentationId: _presentationId, onClose
         </div>
       </div>
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap gap-1.5 px-3 py-2.5 border-b border-border shrink-0">
-        {QUICK_ACTIONS.map(action => (
-          <button
-            key={action.label}
-            onClick={() => send(action.instruction)}
-            disabled={streaming || loading}
-            className={cn(
-              'px-2.5 py-1 rounded-lg border text-xs font-medium transition-all cursor-pointer',
-              'border-border bg-bg/30 hover:border-accent/40 hover:bg-accent/10 hover:text-accent text-text-dim',
-              'disabled:opacity-40 disabled:cursor-default',
-            )}
-          >
-            {action.label}
-          </button>
-        ))}
-      </div>
+      {/* Quick actions — editing shortcuts hidden for viewers (their tool
+          menu is read-only on the backend, so the action would fail anyway). */}
+      {canEdit ? (
+        <div className="flex flex-wrap gap-1.5 px-3 py-2.5 border-b border-border shrink-0">
+          {QUICK_ACTIONS.map(action => (
+            <button
+              key={action.label}
+              onClick={() => send(action.instruction)}
+              disabled={streaming || loading}
+              className={cn(
+                'px-2.5 py-1 rounded-lg border text-xs font-medium transition-all cursor-pointer',
+                'border-border bg-bg/30 hover:border-accent/40 hover:bg-accent/10 hover:text-accent text-text-dim',
+                'disabled:opacity-40 disabled:cursor-default',
+              )}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="px-3 py-2 border-b border-border shrink-0 text-[11px] text-text-dim bg-bg/20">
+          {accessRole
+            ? `Read-only access (${accessRole}) — ask me anything about this deck.`
+            : 'Ask me anything about this deck.'}
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-2">
