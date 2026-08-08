@@ -14,7 +14,6 @@ import {
   Download,
   Play,
   Share2,
-  ImagePlus,
   Sparkles,
 } from 'lucide-react'
 import { specApi, exportApi, presentationsApi, ApiClientError, type ExportFormat } from '../lib/api'
@@ -147,24 +146,6 @@ function HistoryWrapper({ presentationId }: { presentationId: string }) {
   return <HistoryPanel presentationId={presentationId} onRestore={applyAiEdit} />
 }
 
-// Adds a new image element (src=null) to the current slide and selects it so
-// the "Insert image" action is immediately available on the canvas.
-function AddImageButton({ slideIndex }: { slideIndex: number }) {
-  const { spec, addElement, setSelection } = useEditor()
-  const handleAdd = () => {
-    if (!spec || !spec.slides[slideIndex]) return
-    const elementIndex = spec.slides[slideIndex].elements.length
-    addElement(slideIndex, { type: 'image', src: null, alt: 'Inserted image', caption: null })
-    setSelection({ slideIndex, elementIndex })
-  }
-  return (
-    <Button variant="outline" size="sm" className="w-full" onClick={handleAdd}>
-      <ImagePlus size={14} />
-      Add image
-    </Button>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // EditorBody: everything that needs the editor context lives here, inside
 // a SINGLE EditorProvider.
@@ -267,10 +248,6 @@ function EditorBody({
           className="shrink-0 flex flex-col bg-surface/70 backdrop-blur-md border-l border-border"
           style={{ width: inspectorWidth }}
         >
-          <div className="p-3 border-b border-border">
-            <AddImageButton slideIndex={index} />
-          </div>
-
           <div className="flex border-b border-border bg-bg/30">
             {(['ai', 'history'] as InspectorTab[]).map((tab) => (
               <button
