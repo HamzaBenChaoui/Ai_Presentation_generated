@@ -42,6 +42,32 @@ import ShareModal from '../components/ShareModal'
 
 type InspectorTab = 'theme' | 'ai' | 'history'
 
+// --- Resizable inspector sidebar --------------------------------------------
+const INSPECTOR_WIDTH_KEY = 'slideai.inspector.width'
+const INSPECTOR_WIDTH_MIN = 300
+const INSPECTOR_WIDTH_MAX = 620
+const INSPECTOR_WIDTH_DEFAULT = 320
+
+function clampInspectorWidth(width: number): number {
+  // Never exceed ~45% of the viewport so the canvas keeps room, and never go
+  // below the panel min — unless the window is so narrow that even the min
+  // cannot fit (responsive fallback: shrink the floor proportionally).
+  const maxByViewport = Math.floor(
+    (typeof window !== 'undefined' ? window.innerWidth : 1280) * 0.45,
+  )
+  const min = Math.min(INSPECTOR_WIDTH_MIN, maxByViewport)
+  const max = Math.max(min, Math.min(INSPECTOR_WIDTH_MAX, maxByViewport))
+  return Math.round(Math.min(max, Math.max(min, width)))
+}
+
+function readInspectorWidth(): number {
+  try {
+    const stored = Number(localStorage.getItem(INSPECTOR_WIDTH_KEY))
+    if (Number.isFinite(stored)) return clampInspectorWidth(stored)
+  } catch { /* ignore */ }
+  return INSPECTOR_WIDTH_DEFAULT
+}
+
 export interface EditorBridgeHandle {
   undo: () => void
   redo: () => void
@@ -164,6 +190,48 @@ function EditorBody({
   presentationId, initialSpec, index, inspectorTab, setInspectorTab,
   onSpecChange, onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
 }: EditorBodyProps) {
+  const [inspectorWidth, setInspectorWidth] = useState(readInspectorWidth)
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  // Persist the chosen width so it survives reloads.
+  useEffect(() => {
+    try {
+      localStorage.setItem(INSPECTOR_WIDTH_KEY, String(inspectorWidth))
+    } catch { /* ignore */ }
+  }, [inspectorWidth])
+
+  // Clamp when the viewport changes (narrow windows shrink the ceiling).
+  useEffect(() => {
+    const onResize = () => setInspectorWidth(clampInspectorWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault()
+    resizeRef.current = { startX: e.clientX, startWidth: inspectorWidth }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (ev: MouseEvent) => {
+      const r = resizeRef.current
+      if (!r) return
+      const delta = r.startX - ev.clientX
+      setInspectorWidth(clampInspectorWidth(r.startWidth + delta))
+    }
+    const onUp = () => {
+      resizeRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const resetWidth = () => setInspectorWidth(INSPECTOR_WIDTH_DEFAULT)
+
   return (
     <EditorProvider
       presentationId={presentationId}
@@ -183,8 +251,24 @@ function EditorBody({
           </div>
         </main>
 
+        {/* ----- Resize handle (drag left edge of the inspector) ----- */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize inspector panel"
+          title="Drag to resize · double-click to reset"
+          onMouseDown={startResize}
+          onDoubleClick={resetWidth}
+          className="group relative -mx-1 z-10 w-2 shrink-0 cursor-col-resize flex items-stretch"
+        >
+          <span className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[3px] bg-transparent transition-colors group-hover:bg-accent/70 group-active:bg-accent" />
+        </div>
+
         {/* ----- Right: Inspector Panel ----- */}
-        <aside className="w-72 shrink-0 flex flex-col bg-surface/70 backdrop-blur-md border-l border-border">
+        <aside
+          className="shrink-0 flex flex-col bg-surface/70 backdrop-blur-md border-l border-border"
+          style={{ width: inspectorWidth }}
+        >
           <div className="flex border-b border-border bg-bg/30">
             {(['theme', 'ai', 'history'] as InspectorTab[]).map((tab) => (
               <button
