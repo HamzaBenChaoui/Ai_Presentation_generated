@@ -3,15 +3,12 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Sparkles,
-  Sun,
-  Moon,
   Wand2,
   Palette,
   Users,
   ShieldCheck,
   ArrowLeft,
 } from 'lucide-react'
-import { useTheme } from '../../context/ThemeContext'
 
 const HIGHLIGHTS = [
   {
@@ -67,8 +64,6 @@ export function AuthLayout({
   subtitle: string
   children: ReactNode
 }) {
-  const { resolved, toggle } = useTheme()
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-bg">
       {/* Aurora background */}
@@ -104,13 +99,6 @@ export function AuthLayout({
           </span>
         </Link>
         <div className="flex items-center gap-2">
-          <button
-            onClick={toggle}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-text hover:bg-surface2 transition-colors cursor-pointer"
-            aria-label="Toggle theme"
-          >
-            {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
           <Link
             to="/"
             className="hidden sm:inline-flex h-10 items-center gap-1.5 rounded-xl px-4 text-sm font-medium text-text hover:bg-surface2 transition-colors"

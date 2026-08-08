@@ -15,13 +15,10 @@ import {
   Wand2,
   ArrowRight,
   MonitorPlay,
-  Sun,
-  Moon,
   Check,
   Layers,
   PenTool,
 } from 'lucide-react'
-import { useTheme } from '../context/ThemeContext'
 
 /* ================================================================== */
 /*  Helpers & primitives                                              */
@@ -345,7 +342,6 @@ function SpotlightNumber({
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const { resolved, toggle } = useTheme()
 
   return (
     <div className="min-h-screen bg-bg text-text overflow-x-hidden">
@@ -366,16 +362,6 @@ export default function HomePage() {
         </motion.div>
 
         <div className="flex items-center gap-1.5">
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            onClick={toggle}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-text hover:bg-surface2 transition-colors cursor-pointer"
-            aria-label="Toggle theme"
-          >
-            {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </motion.button>
           <motion.button
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}

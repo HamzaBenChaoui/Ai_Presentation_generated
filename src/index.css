@@ -44,27 +44,6 @@
   --color-scrollbar-hover: #a8a29e;
 }
 
-/* --- Dark mode overrides --- */
-.dark {
-  --color-bg: #1c1917;
-  --color-surface: #292524;
-  --color-surface2: #3a3530;
-  --color-surface3: #44403c;
-  --color-border: #57534e;
-  --color-border-active: #78716c;
-  --color-text: #fafaf9;
-  --color-text-muted: #a8a29e;
-  --color-text-dim: #78716c;
-  --color-accent: #fb923c;
-  --color-accent2: #fbbf24;
-  --color-accent-soft: #7c2d12;
-  --color-accent2-soft: #713f12;
-  --color-danger: #ef4444;
-  --color-success: #22c55e;
-  --color-scrollbar: #57534e;
-  --color-scrollbar-hover: #78716c;
-}
-
 /* --- Base styles --- */
 body {
   font-family: var(--font-body);

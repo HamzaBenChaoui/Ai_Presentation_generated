@@ -1,10 +1,6 @@
 import { Outlet, Link } from 'react-router-dom'
-import { Sun, Moon } from 'lucide-react'
-import { useTheme } from '../context/ThemeContext'
 
 export default function MarketingShell() {
-  const { resolved, toggle } = useTheme()
-
   return (
     <div className="min-h-screen bg-bg">
       {/* Sticky top bar */}
@@ -15,13 +11,6 @@ export default function MarketingShell() {
         >
           SlideAI
         </Link>
-        <button
-          onClick={toggle}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-text hover:bg-surface2 transition-colors cursor-pointer"
-          aria-label="Toggle theme"
-        >
-          {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
       </header>
 
       {/* Centered content */}

@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Sun,
-  Moon,
   Menu,
   X,
   LogOut,
@@ -14,7 +12,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { cn } from '../lib/cn'
-import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 
 const SIDEBAR_KEY = 'slideai.sidebar'
@@ -42,7 +39,6 @@ function getInitialCollapsed(): boolean {
 }
 
 export default function AppShell() {
-  const { resolved, toggle } = useTheme()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
@@ -125,17 +121,6 @@ export default function AppShell() {
         {/* Bottom section */}
         <div className="border-t border-border p-2 space-y-1">
           <button
-            onClick={toggle}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-text-muted hover:bg-surface2 hover:text-text transition-colors cursor-pointer',
-              collapsed && 'justify-center px-0',
-            )}
-            title={collapsed ? 'Toggle theme' : undefined}
-          >
-            {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            {!collapsed && <span>Toggle theme</span>}
-          </button>
-          <button
             onClick={handleSignOut}
             className={cn(
               'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-text-muted hover:bg-surface2 hover:text-text transition-colors cursor-pointer',
@@ -182,13 +167,6 @@ export default function AppShell() {
               SlideAI
             </span>
           </div>
-          <button
-            onClick={toggle}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-text hover:bg-surface2 transition-colors cursor-pointer"
-            aria-label="Toggle theme"
-          >
-            {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
         </header>
 
         {/* Mobile sidebar overlay */}

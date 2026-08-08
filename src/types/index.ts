@@ -1,5 +1,3 @@
-export type ThemeMode = 'dark' | 'light' | 'system'
-
 export interface ColorPalette {
   bg: string
   surface: string

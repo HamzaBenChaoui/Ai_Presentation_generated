@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, Trash2, User as UserIcon, Palette, SlidersHorizontal, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
-import { cn } from '../lib/cn'
+import { LogOut, Trash2, User as UserIcon, SlidersHorizontal, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { useToast } from '../components/ui/Toast'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useAuth } from '../context/AuthContext'
-import { useTheme, type ThemeMode } from '../context/ThemeContext'
 import { getSettings, updateSettings, clearSettings, DEFAULT_SETTINGS, type AppSettings } from '../lib/settings'
 import { clearTokens } from '../lib/api'
 
@@ -65,7 +63,6 @@ function initials(name: string, email: string): string {
 
 export default function SettingsPage() {
   const { user, signOut, updateDisplayName } = useAuth()
-  const { mode, setMode } = useTheme()
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -125,12 +122,6 @@ export default function SettingsPage() {
     toast.success('Local data cleared')
     window.location.reload()
   }
-
-  const themeModes: { key: ThemeMode; label: string }[] = [
-    { key: 'dark', label: 'Dark' },
-    { key: 'light', label: 'Light' },
-    { key: 'system', label: 'System' },
-  ]
 
   const createdDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString(undefined, {
@@ -220,38 +211,6 @@ export default function SettingsPage() {
               </Button>
             </div>
           </div>
-        </div>
-      </SpotlightCard>
-      </motion.div>
-
-      {/* ── Appearance ──────────────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1, ease: easeOut }}
-        className="relative"
-      >
-      <SpotlightCard className="p-5 sm:p-6">
-        <SectionTitle
-          icon={Palette}
-          title="Appearance"
-          description="Theme mode for the whole app"
-        />
-        <div className="inline-flex rounded-xl border border-border bg-bg p-1">
-          {themeModes.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setMode(t.key)}
-              className={cn(
-                'px-4 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer',
-                mode === t.key
-                  ? 'bg-gradient-to-br from-accent to-accent2 text-white shadow-md shadow-accent/25'
-                  : 'text-text-muted hover:text-text',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
         </div>
       </SpotlightCard>
       </motion.div>
