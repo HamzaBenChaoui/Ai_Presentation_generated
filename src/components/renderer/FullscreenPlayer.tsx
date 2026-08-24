@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { AnimatePresence, motion, type Variants } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Maximize, Minimize, X } from 'lucide-react'
 import type { PresentationSpec } from '../../types'
 import SlideRenderer from './SlideRenderer'
 import { tokenFor } from './theme'
 import { getSettings } from '../../lib/settings'
+import { EASE_IN, EASE_OUT } from './animations'
+import { SlidePresentationContext } from './slideContext'
 
 interface Props {
   spec: PresentationSpec
@@ -18,76 +20,58 @@ interface Props {
 const BASE_W = 1920
 const BASE_H = 1080
 
-// Theme-aware transition styles. Each theme picks one of these "energies":
-// - calm:    subtle fade (minimal, luxury, apple, finance)
-// - dynamic: horizontal slide (startup, neon, modern, glass, dark, google)
+// Theme-aware transition energy, now sourced from the theme tokens so the
+// renderer and the player share one source of truth:
+// - calm:    subtle crossfade (minimal, luxury, apple, finance)
+// - dynamic: directional slide (startup, neon, modern, glass, dark, google)
 // - bold:    zoom + fade (medical, education, microsoft, corporate, openai)
-// The variants are direction-aware so backward/forward navigation feels right.
 type Energy = 'calm' | 'dynamic' | 'bold'
 
-const THEME_ENERGY: Record<string, Energy> = {
-  minimal: 'calm',
-  luxury: 'calm',
-  apple: 'calm',
-  finance: 'calm',
-  corporate: 'bold',
-  education: 'bold',
-  medical: 'bold',
-  microsoft: 'bold',
-  openai: 'bold',
-  startup: 'dynamic',
-  neon: 'dynamic',
-  modern: 'dynamic',
-  glass: 'dynamic',
-  dark: 'dynamic',
-  google: 'dynamic',
+// Two persistent render slots. The current slide keeps its slot (so its
+// element instances stay mounted), and on navigation we flip it to the
+// "exiting" state in place — its elements play their dissolution — while the
+// other slot mounts the incoming slide fresh. Because both are absolutely
+// positioned over each other, the two choreographies OVERLAP instead of
+// playing in sequence (the 100-150ms overlap window comes from the element
+// base delay in AnimatedElement/MotionItem).
+type SlotId = 'a' | 'b'
+type Dir = 'forward' | 'backward'
+
+interface Exiting {
+  idx: number
+  slot: SlotId
+  dir: Dir
 }
 
-function variantsFor(energy: Energy): Record<'forward' | 'backward', Variants> {
-  if (energy === 'calm') {
-    return {
-      forward: {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-      },
-      backward: {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-      },
-    }
-  }
-  if (energy === 'bold') {
-    return {
-      forward: {
-        initial: { opacity: 0, scale: 0.92 },
-        animate: { opacity: 1, scale: 1 },
-        exit: { opacity: 0, scale: 1.06 },
-      },
-      backward: {
-        initial: { opacity: 0, scale: 1.06 },
-        animate: { opacity: 1, scale: 1 },
-        exit: { opacity: 0, scale: 0.92 },
-      },
-    }
-  }
-  // dynamic
-  return {
-    forward: {
-      initial: { opacity: 0, x: 120, scale: 0.96 },
-      animate: { opacity: 1, x: 0, scale: 1 },
-      exit: { opacity: 0, x: -120, scale: 0.96 },
-    },
-    backward: {
-      initial: { opacity: 0, x: -120, scale: 0.96 },
-      animate: { opacity: 1, x: 0, scale: 1 },
-      exit: { opacity: 0, x: 120, scale: 0.96 },
-    },
+// Container choreography — subtle, because the real work is element-level.
+// The outgoing slide dissolves in place while the incoming settles in.
+function enterFrom(energy: Energy, dir: Dir) {
+  switch (energy) {
+    case 'calm':
+      return { opacity: 0, scale: 0.995 }
+    case 'bold':
+      return { opacity: 0, scale: 0.95 }
+    default:
+      return { opacity: 0, x: dir === 'forward' ? 70 : -70, scale: 0.99 }
   }
 }
 
-const slideTransition = { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const }
+function outgoingAnim(energy: Energy, dir: Dir) {
+  switch (energy) {
+    case 'calm':
+      return { opacity: 0, scale: 1.01 }
+    case 'bold':
+      return { opacity: 0, scale: 1.06 }
+    default:
+      return { opacity: 0, x: dir === 'forward' ? -70 : 70, scale: 1.01 }
+  }
+}
+
+const enterTrans = { duration: 0.6, ease: EASE_OUT }
+const exitTrans = { duration: 0.5, ease: EASE_IN }
+// Long enough for the last exiting element (max exit stagger 0.3 + 0.26) to
+// finish before the slot is recycled.
+const EXIT_WINDOW_MS = 700
 
 // Cover-fit scale: grow the 16:9 slide so it fills every corner of the
 // viewport, cropping only the excess (no letterboxing / visible background).
@@ -96,23 +80,42 @@ function coverScale(vw: number, vh: number) {
 }
 
 export default function FullscreenPlayer({ spec, onExit }: Props) {
+  const prefersReduced = useReducedMotion()
+  const animationsEnabled = getSettings().animationsEnabled && !prefersReduced
   const [index, setIndex] = useState(0)
-  const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
+  const [slot, setSlot] = useState<SlotId>('a')
+  const [exiting, setExiting] = useState<Exiting | null>(null)
+  const [direction, setDirection] = useState<Dir>('forward')
   const [isFs, setIsFs] = useState(false)
   const [box, setBox] = useState({ w: window.innerWidth, h: window.innerHeight })
   const containerRef = useRef<HTMLDivElement>(null)
+  const exitTimer = useRef<number>(undefined as unknown as number)
   const total = spec.slides.length
 
   const scale = coverScale(box.w, box.h)
 
   const go = useCallback(
     (next: number) => {
-      if (next < 0 || next >= total) return
-      setDirection(next > index ? 'forward' : 'backward')
-      setIndex(next)
+      if (next < 0 || next >= total || next === index) return
+      const dir: Dir = next > index ? 'forward' : 'backward'
+      setDirection(dir)
+      const other: SlotId = slot === 'a' ? 'b' : 'a'
+      if (animationsEnabled) {
+        setExiting({ idx: index, slot, dir })
+        setSlot(other)
+        setIndex(next)
+        window.clearTimeout(exitTimer.current)
+        exitTimer.current = window.setTimeout(() => setExiting(null), EXIT_WINDOW_MS)
+      } else {
+        setExiting(null)
+        setSlot(other)
+        setIndex(next)
+      }
     },
-    [total, index],
+    [total, index, slot, animationsEnabled],
   )
+
+  useEffect(() => () => window.clearTimeout(exitTimer.current), [])
 
   const goNext = useCallback(() => go(index + 1), [go, index])
   const goPrev = useCallback(() => go(index - 1), [go, index])
@@ -237,13 +240,65 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
   }
 
   const tokens = tokenFor(spec.meta?.theme)
+  const energy: Energy = (tokens.energy as Energy) || 'dynamic'
   const progressPct = total ? ((index + 1) / total) * 100 : 0
-  const animationsEnabled = getSettings().animationsEnabled
-  const energy: Energy = THEME_ENERGY[spec.meta?.theme || ''] || 'dynamic'
-  const slideVariants = variantsFor(energy)
-  const transition = animationsEnabled
-    ? slideTransition
-    : { duration: 0 }
+
+  // One render slot per slide state. The exiting slide stays in its original
+  // slot (instances preserved → real exit choreography), the incoming mounts
+  // in the other slot. Both overlap during the window.
+  const layer = (slotId: SlotId) => {
+    const isExiting = exiting?.slot === slotId && exiting.idx !== index
+    const slide = isExiting && exiting ? spec.slides[exiting.idx] : spec.slides[index]
+    const active = !isExiting
+    const dir = isExiting && exiting ? exiting.dir : direction
+    const shown = isExiting || slotId === slot || (exiting?.slot === slotId && exiting.idx === index)
+
+    if (!shown) return null
+
+    const containerInitial = animationsEnabled ? enterFrom(energy, dir) : undefined
+    const containerTarget = isExiting ? outgoingAnim(energy, dir) : { opacity: 1, x: 0, scale: 1 }
+    const containerTrans = isExiting ? exitTrans : enterTrans
+
+    return (
+      <motion.div
+        key={slotId}
+        initial={containerInitial}
+        animate={animationsEnabled ? containerTarget : undefined}
+        transition={animationsEnabled ? containerTrans : { duration: 0 }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: isExiting ? 2 : 1,
+        }}
+      >
+        <div style={{ width: BASE_W * scale, height: BASE_H * scale, position: 'relative' }}>
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: BASE_W,
+              height: BASE_H,
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+            }}
+          >
+            <SlideRenderer
+              slide={slide}
+              themeName={spec.meta?.theme}
+              tokens={tokens}
+              customAnimations={spec.meta?.customAnimations}
+              active={active}
+              presentation
+            />
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
 
   // Render through a portal at document.body so ancestor transforms (e.g.
   // framer-motion motion divs, SpotlightCard, AnimatePresence in the editor)
@@ -269,54 +324,22 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
         userSelect: 'none',
       }}
     >
-      {/* Slide stage — covers the entire viewport, slide is cover-scaled */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
-      >
-        <AnimatePresence mode="wait" custom={direction}>
-          <motion.div
-            key={index}
-            custom={direction}
-            variants={
-              animationsEnabled
-                ? slideVariants[direction]
-                : { initial: { opacity: 1 }, animate: { opacity: 1 }, exit: { opacity: 0 } }
-            }
-            transition={transition}
-            style={{ width: BASE_W * scale, height: BASE_H * scale, position: 'relative' }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: BASE_W,
-                height: BASE_H,
-                transform: `scale(${scale})`,
-                transformOrigin: 'top left',
-              }}
-            >
-              <SlideRenderer
-                slide={spec.slides[index]}
-                themeName={spec.meta?.theme}
-                tokens={tokens}
-                active
-                presentation
-              />
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {/* Slide stage — covers the entire viewport, slides are cover-scaled */}
+      <SlidePresentationContext.Provider value={animationsEnabled}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {layer('a')}
+          {layer('b')}
+        </div>
+      </SlidePresentationContext.Provider>
 
       {/* Controls overlay — floats above the slide, never steals layout space */}
       <div

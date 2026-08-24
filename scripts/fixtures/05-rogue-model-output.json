@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "title": "Rogue Model Output Test",
+    "theme": "minimal",
+    "language": "English",
+    "tone": "Professional",
+    "_expectValid": ["validFloat", "linearSpin", "longAmbient", "repairedTransform"],
+    "customAnimations": [
+      {
+        "name": "validFloat",
+        "keyframes": "@keyframes validFloat { 0% { opacity: 0; transform: translateY(12px) } 100% { opacity: 1; transform: translateY(0) } }",
+        "duration": 400,
+        "easing": "ease-out"
+      },
+      {
+        "name": "linearSpin",
+        "keyframes": "@keyframes linearSpin { from { opacity: 0; transform: rotate(-8deg) } to { opacity: 1; transform: rotate(0) } }",
+        "duration": 600,
+        "easing": "linear"
+      },
+      {
+        "name": "longAmbient",
+        "keyframes": "@keyframes longAmbient { 0% { opacity: 0.4 } 100% { opacity: 1 } }",
+        "duration": 90000,
+        "easing": "ease-in-out"
+      },
+      {
+        "name": "badUrl",
+        "keyframes": "@keyframes badUrl { 0% {} url(https://evil.example) }",
+        "duration": 500,
+        "easing": "ease-out"
+      },
+      {
+        "name": "badBraces",
+        "keyframes": "@keyframes badBraces { 0% { opacity: 0 ",
+        "duration": 500,
+        "easing": "ease-out"
+      },
+      {
+        "name": "repairedTransform",
+        "keyframes": "@keyframes repairedTransform { 0% { transform: 99foobar junk } 100% { transform: none } }",
+        "duration": 500,
+        "easing": "ease-out"
+      }
+    ]
+  },
+  "slides": [
+    {
+      "layout": "hero",
+      "elements": [
+        { "type": "title", "text": "Fallback Verification", "level": 1, "animation": "validFloat" },
+        { "type": "subtitle", "text": "Security + garbage are dropped silently; creative output always survives." }
+      ]
+    }
+  ]
+}

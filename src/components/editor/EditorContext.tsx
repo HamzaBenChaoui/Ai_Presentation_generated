@@ -70,6 +70,12 @@ export function useEditor(): EditorContextValue {
   return ctx
 }
 
+// Non-throwing variant for components that render both inside and outside the
+// editor (e.g. the slide renderer). Returns null when not inside the provider.
+export function useOptionalEditor(): EditorContextValue | null {
+  return useContext(EditorContext)
+}
+
 // --- shallow helpers -------------------------------------------------------
 
 function patchElement(slide: SlideSpec, elIdx: number, patch: Partial<SpecElement>): SlideSpec {

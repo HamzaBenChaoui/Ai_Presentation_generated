@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "title": "Verde Coffee Roasters",
+    "theme": "startup",
+    "language": "English",
+    "tone": "Bold",
+    "_expectValid": ["slideUp", "steamRise"],
+    "customAnimations": [
+      {
+        "name": "slideUp",
+        "keyframes": "@keyframes slideUp { from { opacity: 0; transform: translateY(30px) } to { opacity: 1; transform: translateY(0) } }",
+        "duration": 800,
+        "easing": "cubic-bezier(0.16, 1, 0.3, 1)"
+      },
+      {
+        "name": "steamRise",
+        "keyframes": "@keyframes steamRise { 0% { opacity: 0; transform: translateY(18px) scale(0.94) } 100% { opacity: 1; transform: translateY(0) scale(1) } }",
+        "duration": 600,
+        "easing": "ease-out"
+      }
+    ]
+  },
+  "slides": [
+    {
+      "layout": "hero",
+      "elements": [
+        { "type": "title", "text": "Specialty Coffee, Direct to Office", "level": 1, "animation": "slideUp" },
+        { "type": "subtitle", "text": "Single-origin beans, IoT-roasted, delivered to 5,000+ workplaces" }
+      ]
+    },
+    {
+      "layout": "statistics",
+      "elements": [
+        { "type": "title", "text": "The Market Window", "level": 2, "animation": "steamRise" },
+        {
+          "type": "statistics",
+          "items": [
+            { "value": "$48B", "label": "US specialty coffee market (2024)" },
+            { "value": "67%", "label": "Offices without a quality coffee setup" },
+            { "value": "$2.40", "label": "Our cost per cup vs $5.20 at the café next door" }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": "timeline",
+      "elements": [
+        { "type": "title", "text": "Roadmap to Profitability", "level": 2 },
+        {
+          "type": "timeline",
+          "items": [
+            { "year": "Q1 2025", "text": "Launch 3 new metros — 1,200 sites" },
+            { "year": "Q3 2025", "text": "Open Nashville roastery, cutting COGS by 22%" },
+            { "year": "Q1 2026", "text": "Launch B2C subscription tier" },
+            { "year": "Q4 2026", "text": "Break-even at $24M ARR; raise Series B" }
+          ]
+        }
+      ]
+    }
+  ]
+}

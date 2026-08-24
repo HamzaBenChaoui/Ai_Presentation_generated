@@ -92,6 +92,17 @@ export type LayoutName =
   | 'process' | 'flow' | 'roadmap' | 'team' | 'quote' | 'swot'
   | 'table' | 'chart' | 'image-left' | 'image-right' | 'cta'
   | 'conclusion' | 'thank-you'
+  // AI free-coded slide: slide.code carries real HTML/CSS/JS rendered in a
+  // sandboxed iframe (see CustomCodeFrame). Everything else is ignored.
+  | 'custom'
+
+// Free-coded slide payload. The AI writes real code; the renderer hosts it in
+// a sandboxed iframe with theme tokens + Chart.js/anime.js preloaded.
+export interface CustomSlideCode {
+  html?: string
+  css?: string
+  js?: string
+}
 
 export type ElementType =
   | 'title' | 'subtitle' | 'paragraph' | 'bullets' | 'image'
@@ -126,6 +137,23 @@ export interface SlideSpec {
   theme?: string | null
   notes?: string | null
   elements: SpecElement[]
+  // Only used when layout === 'custom': the AI-authored code for this slide.
+  code?: CustomSlideCode | null
+}
+
+// An AI-authored custom animation. The model defines a named keyframe set the
+// renderer can apply to elements via `element.animation = "<name>"`. Everything
+// is validated with a real CSS parser before it reaches the DOM; invalid defs
+// are dropped silently and the element falls back to a built-in animation.
+export interface CustomAnimationDef {
+  name: string
+  // Raw "@keyframes <name> { ... }" rule (or just the body). Only transform,
+  // opacity and filter are allowed inside.
+  keyframes: string
+  // Animation length in milliseconds (validated: 100–2000ms).
+  duration: number
+  // Timing function — a cubic-bezier(...), steps(...) or non-linear keyword.
+  easing?: string
 }
 
 export interface PresentationMeta {
@@ -134,6 +162,7 @@ export interface PresentationMeta {
   background?: string | null
   language: string
   tone: string
+  customAnimations?: CustomAnimationDef[] | null
 }
 
 export interface PresentationSpec {

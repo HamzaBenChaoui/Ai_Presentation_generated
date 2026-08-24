@@ -3,6 +3,7 @@ import type { SlideSpec, SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
 import AnimatedElement from './AnimatedElement'
 import MotionItem from './MotionItem'
+import ChartView from './ChartView'
 import { SlideActiveContext } from './slideContext'
 
 const useSlideActive = () => useContext(SlideActiveContext)
@@ -344,20 +345,11 @@ export function Chart({ slide, tokens = defaultTokens }: LayoutProps) {
   const e = splitElements(slide)
   const stats = e.statistics?.[0] as any
   const items = stats?.items || []
-  const max = Math.max(...items.map((x: any) => parseFloat(String(x.value).replace(/[^0-9.]/g, '')) || 1), 1)
   return (
     <div style={stack()}>
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '14px', height: '200px', padding: '20px', ...card(tokens) }}>
-        {items.map((it: any, i: number) => {
-          const v = parseFloat(String(it.value).replace(/[^0-9.]/g, '')) || 0
-          return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', height: '100%', justifyContent: 'flex-end' }}>
-              <div style={{ width: '100%', height: `${(v / max) * 100}%`, background: `linear-gradient(180deg, ${tokens.accent}, ${tokens.accent2})`, borderRadius: '8px 8px 0 0', transition: 'height 0.6s ease' }} />
-              <div style={{ fontSize: '12px', color: tokens.textMuted, textAlign: 'center' }}>{it.label}</div>
-            </div>
-          )
-        })}
+      <div style={{ ...card(tokens), flex: 1, minHeight: '240px', padding: '20px' }}>
+        <ChartView items={items} tokens={tokens} />
       </div>
     </div>
   )

@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "title": "Aurora Engine Launch",
+    "theme": "startup",
+    "language": "English",
+    "tone": "Bold",
+    "_expectValid": ["riseGlow", "popIn"],
+    "customAnimations": [
+      {
+        "name": "riseGlow",
+        "keyframes": "@keyframes riseGlow { 0% { opacity: 0; transform: translateY(36px) scale(0.96); filter: blur(6px) } 60% { opacity: 1; filter: blur(0px) } 100% { opacity: 1; transform: none; filter: none } }",
+        "duration": 700,
+        "easing": "cubic-bezier(0.16, 1, 0.3, 1)"
+      },
+      {
+        "name": "popIn",
+        "keyframes": "@keyframes popIn { 0%, 20% { opacity: 0; transform: scale(0.6) } 80%, 100% { opacity: 1; transform: scale(1) } }",
+        "duration": 450,
+        "easing": "ease-out"
+      }
+    ]
+  },
+  "slides": [
+    {
+      "layout": "hero",
+      "elements": [
+        { "type": "title", "text": "Aurora: Real-Time Rendering, Reimagined", "level": 1, "animation": "riseGlow" },
+        { "type": "subtitle", "text": "4.2× faster scenes, zero GPU upgrades" }
+      ]
+    },
+    {
+      "layout": "statistics",
+      "elements": [
+        { "type": "title", "text": "Why Teams Are Switching", "level": 2 },
+        {
+          "type": "statistics",
+          "items": [
+            { "value": "4.2×", "label": "Faster render on the same hardware" },
+            { "value": "38ms", "label": "Avg frame time in heavy scenes" },
+            { "value": "12k", "label": "Studios on the early-access list" }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": "conclusion",
+      "elements": [
+        { "type": "title", "text": "Early Access Now Open", "level": 2, "animation": "popIn" },
+        { "type": "paragraph", "text": "Join 12,000 studios shaping the future of real-time graphics." }
+      ]
+    }
+  ]
+}

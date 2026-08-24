@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "title": "Aurora Showpiece",
+    "theme": "neon",
+    "language": "English",
+    "tone": "Bold"
+  },
+  "slides": [
+    {
+      "layout": "custom",
+      "elements": [],
+      "notes": "Free-coded hero: gradient headline reveal + counting fps meter.",
+      "code": {
+        "html": "<div class='stage'><div class='center'><h1 class='reveal'>Aurora Engine</h1><p class='reveal'>Real-time rendering at <span id='fps'>0</span> fps</p></div></div>",
+        "css": ".stage{position:relative;width:100%;height:100%;background:radial-gradient(ellipse at 50% 120%, #1a0b2e, var(--bg));overflow:hidden}.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.reveal{opacity:0}h1{font-family:var(--font-heading);font-size:clamp(40px,6vw,84px);margin:0;background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent}p{color:var(--text-muted)}",
+        "js": "document.addEventListener('slide:activate', function(){ var els=document.querySelectorAll('.reveal'); els.forEach(function(el,i){ setTimeout(function(){ el.style.transition='all .8s cubic-bezier(0.16,1,0.3,1)'; el.style.opacity='1'; el.style.transform='translateY(0)'; }, 150+i*140); }); var o={v:0},el=document.getElementById('fps'); var id=setInterval(function(){ o.v+=7; if(o.v>=144){o.v=144;clearInterval(id)} el.textContent=Math.round(o.v); },30); });"
+      }
+    },
+    {
+      "layout": "hero",
+      "elements": [
+        { "type": "title", "text": "Built Different", "level": 1 },
+        { "type": "subtitle", "text": "Structured layouts and free-coded showpieces, side by side" }
+      ]
+    }
+  ]
+}

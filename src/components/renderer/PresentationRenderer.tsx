@@ -31,7 +31,7 @@ export default function PresentationRenderer({ spec, activeIndex, fullscreen }: 
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <ActiveSlideIndexProvider slideIndex={activeIndex}>
-          <SlideRenderer slide={slide} themeName={spec.meta?.theme} tokens={tokens} />
+          <SlideRenderer slide={slide} themeName={spec.meta?.theme} tokens={tokens} customAnimations={spec.meta?.customAnimations} />
         </ActiveSlideIndexProvider>
       </div>
     )
@@ -40,7 +40,7 @@ export default function PresentationRenderer({ spec, activeIndex, fullscreen }: 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', width: '100%' }}>
       {spec.slides.map((slide, i) => (
-        <SlideRenderer key={i} slide={slide} themeName={spec.meta?.theme} tokens={tokens} />
+        <SlideRenderer key={i} slide={slide} themeName={spec.meta?.theme} tokens={tokens} customAnimations={spec.meta?.customAnimations} />
       ))}
     </div>
   )

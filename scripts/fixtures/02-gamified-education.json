@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "title": "Gamification in Education",
+    "theme": "education",
+    "language": "English",
+    "tone": "Professional",
+    "_expectValid": ["tiltIn", "levelUp"],
+    "customAnimations": [
+      {
+        "name": "tiltIn",
+        "keyframes": "from { opacity: 0; transform: rotate(-4deg) translateY(24px) } to { opacity: 1; transform: rotate(0) translateY(0) }",
+        "duration": 500,
+        "easing": "steps(4, end)"
+      },
+      {
+        "name": "levelUp",
+        "keyframes": "@keyframes levelUp { 0% { opacity: 0; transform: scale(0.8) } 70% { opacity: 1; transform: scale(1.06) } 100% { opacity: 1; transform: scale(1) } }",
+        "duration": 600,
+        "easing": "ease-in-out"
+      }
+    ]
+  },
+  "slides": [
+    {
+      "layout": "hero",
+      "elements": [
+        { "type": "title", "text": "Classrooms, Reimagined as Games", "level": 1, "animation": "tiltIn" },
+        { "type": "subtitle", "text": "XP, badges and leaderboards across K-12 and higher-ed" }
+      ]
+    },
+    {
+      "layout": "statistics",
+      "elements": [
+        { "type": "title", "text": "The Engagement Dividend", "level": 2, "animation": "levelUp" },
+        {
+          "type": "statistics",
+          "items": [
+            { "value": "73%", "label": "Teachers using Kahoot report higher homework completion" },
+            { "value": "2.3×", "label": "Daily active sessions on Duolingo vs traditional apps" },
+            { "value": "$1.5B", "label": "EdTech gamification market, 2024 → 2030" }
+          ]
+        }
+      ]
+    },
+    {
+      "layout": "comparison",
+      "elements": [
+        { "type": "title", "text": "Traditional vs Gameful Classrooms", "level": 2 },
+        {
+          "type": "comparison",
+          "left": { "title": "Traditional", "points": ["Single grade per quarter", "Failure = permanent", "Same pace for everyone"] },
+          "right": { "title": "Gameful", "points": ["XP & badges every session", "Mistakes = respawns, not F", "Adaptive difficulty (ClassDojo)"] }
+        }
+      ]
+    }
+  ]
+}

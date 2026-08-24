@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "title": "Q3 2024 Financial Review",
+    "theme": "finance",
+    "language": "English",
+    "tone": "Professional",
+    "_expectValid": ["revealUp", "focusIn"],
+    "customAnimations": [
+      {
+        "name": "revealUp",
+        "keyframes": "@keyframes revealUp { 0% { opacity: 0; transform: translateY(24px) } 100% { opacity: 1; transform: translateY(0) } }",
+        "duration": 650,
+        "easing": "cubic-bezier(0.16, 1, 0.3, 1)"
+      },
+      {
+        "name": "focusIn",
+        "keyframes": "@keyframes focusIn { from { opacity: 0; transform: scale(0.92); filter: blur(4px) } to { opacity: 1; transform: scale(1); filter: blur(0px) } }",
+        "duration": 550,
+        "easing": "ease-out"
+      }
+    ]
+  },
+  "slides": [
+    {
+      "layout": "hero",
+      "elements": [
+        { "type": "title", "text": "Q3 2024: Margin-Driven Growth", "level": 1, "animation": "revealUp" },
+        { "type": "subtitle", "text": "Revenue +18% YoY, gross margin 64.2%, EBITDA $12.4M" }
+      ]
+    },
+    {
+      "layout": "table",
+      "elements": [
+        { "type": "title", "text": "P&L Snapshot ($M)", "level": 2, "animation": "focusIn" },
+        {
+          "type": "table",
+          "headers": ["Line item", "Q3 2023", "Q3 2024", "Δ"],
+          "rows": [
+            ["Revenue", "28.1", "33.2", "+18%"],
+            ["Gross profit", "16.3", "21.3", "+31%"],
+            ["OpEx", "8.9", "9.7", "+9%"],
+            ["EBITDA", "7.4", "11.6", "+57%"]
+          ]
+        }
+      ]
+    },
+    {
+      "layout": "cards",
+      "elements": [
+        { "type": "title", "text": "Variance Drivers", "level": 2 },
+        {
+          "type": "cards",
+          "items": [
+            { "title": "Enterprise tier +24%", "body": "Multi-year deals closed with 3 Fortune-500 logos" },
+            { "title": "Gross margin +6.1pts", "body": "AWS contract renegotiated, -19% on compute" },
+            { "title": "Cash position $48M", "body": "Runway extended to Q4 2026 at current burn" }
+          ]
+        }
+      ]
+    }
+  ]
+}

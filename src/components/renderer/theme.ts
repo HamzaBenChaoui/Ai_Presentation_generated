@@ -9,6 +9,20 @@ export type { SpecElement, SlideSpec } from '../../types'
 
 // --- token shape ------------------------------------------------------------
 
+// Motion energy — what a theme "feels" like during slides. Used to pick
+// direction-aware transitions and depth-aware element behavior.
+export type MotionEnergy = 'calm' | 'dynamic' | 'bold'
+
+// Living-background spec. Each theme gets its own ambient texture adapted to
+// its identity; CSS kinds animate with transform-only rules (60fps safe),
+// `particles` renders a Three.js point-field (WebGL, auto-falls back to blobs).
+export interface AmbientSpec {
+  kind: 'blobs' | 'grid' | 'grain' | 'organic' | 'particles'
+  colors: [string, string, string?]
+  opacity: number
+  speed: number // seconds per full cycle
+}
+
 export interface RenderTokens {
   // color
   bg: string
@@ -32,6 +46,9 @@ export interface RenderTokens {
   // card + button presets (kept as ready CSS snippets)
   cardShadow: string
   buttonRadius: string
+  // motion identity
+  energy: MotionEnergy
+  ambient: AmbientSpec
 }
 
 // --- design-system primitives ----------------------------------------------
@@ -69,6 +86,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.display, fontBody: fonts.sans,
       radius: '14px', radiusLg: '24px', gradient: 'linear-gradient(135deg, #7c6aff, #ff6ac1)',
       cardShadow: '0 20px 50px rgba(0,0,0,0.35)', buttonRadius: '40px',
+      energy: 'dynamic', ambient: { kind: 'blobs', colors: ['#7c6aff', '#ff6ac1', '#37e0c8'], opacity: 0.1, speed: 30 },
     },
   },
   corporate: {
@@ -80,6 +98,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.grotesk, fontBody: fonts.sans,
       radius: '10px', radiusLg: '18px', gradient: 'linear-gradient(135deg, #2563eb, #0ea5e9)',
       cardShadow: '0 16px 40px rgba(15,23,42,0.4)', buttonRadius: '8px',
+      energy: 'bold', ambient: { kind: 'grid', colors: ['#2563eb', '#0ea5e9'], opacity: 0.05, speed: 55 },
     },
   },
   startup: {
@@ -91,6 +110,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.display, fontBody: fonts.sans,
       radius: '16px', radiusLg: '28px', gradient: 'linear-gradient(135deg, #ff7a45, #ffd23f)',
       cardShadow: '0 24px 60px rgba(0,0,0,0.4)', buttonRadius: '999px',
+      energy: 'dynamic', ambient: { kind: 'blobs', colors: ['#ff7a45', '#ffd23f', '#22d3a6'], opacity: 0.12, speed: 24 },
     },
   },
   education: {
@@ -102,6 +122,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.grotesk, fontBody: fonts.sans,
       radius: '14px', radiusLg: '22px', gradient: 'linear-gradient(135deg, #16a34a, #22c55e)',
       cardShadow: '0 18px 44px rgba(0,0,0,0.3)', buttonRadius: '12px',
+      energy: 'bold', ambient: { kind: 'organic', colors: ['#16a34a', '#22c55e', '#f59e0b'], opacity: 0.08, speed: 40 },
     },
   },
   medical: {
@@ -113,6 +134,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.grotesk, fontBody: fonts.sans,
       radius: '12px', radiusLg: '20px', gradient: 'linear-gradient(135deg, #0ea5e9, #14b8a6)',
       cardShadow: '0 16px 40px rgba(0,0,0,0.3)', buttonRadius: '10px',
+      energy: 'bold', ambient: { kind: 'organic', colors: ['#0ea5e9', '#14b8a6', '#38bdf8'], opacity: 0.08, speed: 40 },
     },
   },
   finance: {
@@ -124,6 +146,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.serif, fontBody: fonts.sans,
       radius: '10px', radiusLg: '16px', gradient: 'linear-gradient(135deg, #1e7d5a, #d4af37)',
       cardShadow: '0 18px 46px rgba(0,0,0,0.4)', buttonRadius: '8px',
+      energy: 'calm', ambient: { kind: 'grid', colors: ['#d4af37', '#1e7d5a'], opacity: 0.05, speed: 60 },
     },
   },
   luxury: {
@@ -135,6 +158,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.serif, fontBody: fonts.sans,
       radius: '8px', radiusLg: '14px', gradient: 'linear-gradient(135deg, #c9a25c, #e8c98a)',
       cardShadow: '0 24px 60px rgba(0,0,0,0.5)', buttonRadius: '6px',
+      energy: 'calm', ambient: { kind: 'grain', colors: ['#c9a25c', '#e8c98a'], opacity: 0.05, speed: 90 },
     },
   },
   minimal: {
@@ -146,6 +170,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.grotesk, fontBody: fonts.sans,
       radius: '10px', radiusLg: '18px', gradient: 'linear-gradient(135deg, #111111, #666666)',
       cardShadow: '0 10px 30px rgba(0,0,0,0.08)', buttonRadius: '8px',
+      energy: 'calm', ambient: { kind: 'grain', colors: ['#111111', '#555555'], opacity: 0.04, speed: 100 },
     },
   },
   glass: {
@@ -157,6 +182,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.display, fontBody: fonts.sans,
       radius: '18px', radiusLg: '28px', gradient: 'linear-gradient(135deg, #9b7bff, #57e6ff)',
       cardShadow: '0 20px 50px rgba(0,0,0,0.45)', buttonRadius: '14px',
+      energy: 'dynamic', ambient: { kind: 'blobs', colors: ['#9b7bff', '#57e6ff', '#ff8fd6'], opacity: 0.08, speed: 26 },
     },
   },
   dark: {
@@ -168,6 +194,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.grotesk, fontBody: fonts.sans,
       radius: '12px', radiusLg: '20px', gradient: 'linear-gradient(135deg, #ffffff, #a1a1aa)',
       cardShadow: '0 20px 50px rgba(0,0,0,0.6)', buttonRadius: '10px',
+      energy: 'dynamic', ambient: { kind: 'blobs', colors: ['#ffffff', '#3b82f6'], opacity: 0.06, speed: 45 },
     },
   },
   neon: {
@@ -179,6 +206,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.display, fontBody: fonts.sans,
       radius: '12px', radiusLg: '22px', gradient: 'linear-gradient(135deg, #ff00c8, #00f0ff)',
       cardShadow: '0 0 40px rgba(255,0,200,0.25)', buttonRadius: '12px',
+      energy: 'dynamic', ambient: { kind: 'particles', colors: ['#ff00c8', '#00f0ff', '#aaff00'], opacity: 0.5, speed: 20 },
     },
   },
   apple: {
@@ -190,6 +218,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.apple, fontBody: fonts.apple,
       radius: '14px', radiusLg: '22px', gradient: 'linear-gradient(135deg, #0071e3, #42a5f5)',
       cardShadow: '0 12px 36px rgba(0,0,0,0.1)', buttonRadius: '999px',
+      energy: 'calm', ambient: { kind: 'grain', colors: ['#1d1d1f', '#86868b'], opacity: 0.04, speed: 100 },
     },
   },
   google: {
@@ -201,6 +230,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.google, fontBody: fonts.google,
       radius: '12px', radiusLg: '20px', gradient: 'linear-gradient(135deg, #4285f4, #ea4335)',
       cardShadow: '0 10px 30px rgba(0,0,0,0.1)', buttonRadius: '999px',
+      energy: 'dynamic', ambient: { kind: 'blobs', colors: ['#4285f4', '#ea4335', '#34a853'], opacity: 0.07, speed: 35 },
     },
   },
   microsoft: {
@@ -212,6 +242,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.microsoft, fontBody: fonts.microsoft,
       radius: '8px', radiusLg: '14px', gradient: 'linear-gradient(135deg, #0078d4, #d83b01)',
       cardShadow: '0 10px 28px rgba(0,0,0,0.12)', buttonRadius: '6px',
+      energy: 'bold', ambient: { kind: 'grid', colors: ['#0078d4', '#d83b01'], opacity: 0.05, speed: 60 },
     },
   },
   openai: {
@@ -223,6 +254,7 @@ const themes: Record<ThemeName, ThemeDef> = {
       fontHeading: fonts.grotesk, fontBody: fonts.sans,
       radius: '12px', radiusLg: '20px', gradient: 'linear-gradient(135deg, #10a37f, #1fb890)',
       cardShadow: '0 20px 50px rgba(0,0,0,0.5)', buttonRadius: '10px',
+      energy: 'bold', ambient: { kind: 'blobs', colors: ['#10a37f', '#19c37d'], opacity: 0.08, speed: 38 },
     },
   },
 }

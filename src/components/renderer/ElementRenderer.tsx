@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
-import { useEditor } from '../editor/EditorContext'
+import { useOptionalEditor } from '../editor/EditorContext'
 import EditableText from '../editor/EditableText'
 import ImagePickerModal from '../editor/ImagePickerModal'
 import { Image as ImageIcon } from 'lucide-react'
@@ -24,8 +24,7 @@ interface Props {
 }
 
 export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 }: Props) {
-  let editorCtx: ReturnType<typeof useEditor> | null = null
-  try { editorCtx = useEditor() } catch { /* not in editor */ }
+  const editorCtx = useOptionalEditor()
   const slideIndex = useActiveSlideIndex()
   const isEditing = editorCtx?.editing === true && (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph')
   const [imagePickerOpen, setImagePickerOpen] = useState(false)
