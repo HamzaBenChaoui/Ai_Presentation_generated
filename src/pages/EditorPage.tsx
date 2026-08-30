@@ -242,11 +242,57 @@ interface EditorBodyProps {
   setDoctorOpen: (open: boolean) => void
 }
 
+/** Outer wrapper: owns the EditorProvider. ALL editor content lives inside. */
 function EditorBody({
   presentationId, initialSpec, initialUpdatedAt, index, setIndex, inspectorTab, setInspectorTab,
   onSpecChange, onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
   doctorOpen, setDoctorOpen,
 }: EditorBodyProps) {
+  return (
+    <EditorProvider
+      presentationId={presentationId}
+      initialSpec={initialSpec}
+      initialUpdatedAt={initialUpdatedAt}
+      onSpecChange={onSpecChange}
+    >
+      <EditorBodyInner
+        presentationId={presentationId}
+        index={index}
+        setIndex={setIndex}
+        inspectorTab={inspectorTab}
+        setInspectorTab={setInspectorTab}
+        onCloseAi={onCloseAi}
+        bridgeRef={bridgeRef}
+        onToolbarState={onToolbarState}
+        aiEditOpen={aiEditOpen}
+        setAiEditOpen={setAiEditOpen}
+        doctorOpen={doctorOpen}
+        setDoctorOpen={setDoctorOpen}
+      />
+    </EditorProvider>
+  )
+}
+
+interface EditorBodyInnerProps {
+  presentationId: string
+  index: number
+  setIndex: (i: number) => void
+  inspectorTab: InspectorTab
+  setInspectorTab: (t: InspectorTab) => void
+  onCloseAi: () => void
+  bridgeRef: React.RefObject<EditorBridgeHandle | null>
+  onToolbarState: (s: ToolbarState) => void
+  aiEditOpen: boolean
+  setAiEditOpen: (open: boolean) => void
+  doctorOpen: boolean
+  setDoctorOpen: (open: boolean) => void
+}
+
+function EditorBodyInner({
+  presentationId, index, setIndex, inspectorTab, setInspectorTab,
+  onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
+  doctorOpen, setDoctorOpen,
+}: EditorBodyInnerProps) {
   const [inspectorWidth, setInspectorWidth] = useState(readInspectorWidth)
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
   // The slide navigator lives inside EditorProvider so "Add slide" can use
@@ -295,12 +341,7 @@ function EditorBody({
   const resetWidth = () => setInspectorWidth(INSPECTOR_WIDTH_DEFAULT)
 
   return (
-    <EditorProvider
-      presentationId={presentationId}
-      initialSpec={initialSpec}
-      initialUpdatedAt={initialUpdatedAt}
-      onSpecChange={onSpecChange}
-    >
+    <>
       <EditorBridge ref={bridgeRef} />
       <ToolbarStateSync onChange={onToolbarState} />
 
@@ -422,7 +463,7 @@ function EditorBody({
         open={doctorOpen}
         onClose={() => setDoctorOpen(false)}
       />
-    </EditorProvider>
+    </>
   )
 }
 
@@ -485,15 +526,51 @@ export default function EditorPage() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    specApi
-      .get(id)
-      .then((data) => {
-        if (!cancelled) {
-          setInitialSpec(data)
-          setLiveSpec(data)
-          setIndex(0)
+
+    const loadSpec = async () => {
+      try {
+        const data = await specApi.get(id)
+        if (cancelled) return
+        setInitialSpec(data)
+        setLiveSpec(data)
+        setIndex(0)
+      } catch (err) {
+        if (cancelled) return
+        // Specless deck (e.g. an old blank deck): seed a starter spec so the
+        // editor opens instead of dead-ending on a 404.
+        if (err instanceof ApiClientError && err.status === 404 && /specification/i.test(err.message)) {
+          try {
+            const starter: PresentationSpec = {
+              meta: {
+                title: 'Untitled presentation',
+                theme: null,
+                background: null,
+                language: 'English',
+                tone: 'Professional',
+              },
+              slides: [{ layout: 'blank', elements: [] }],
+            }
+            const res = await specApi.update(id, starter)
+            if (!cancelled) {
+              setInitialSpec(res.spec)
+              setLiveSpec(res.spec)
+              if (res.updatedAt) setInitialUpdatedAt(res.updatedAt)
+              setIndex(0)
+            }
+            return
+          } catch {
+            /* fall through to the error state below */
+          }
         }
-      })
+        if (!cancelled) {
+          setError(err instanceof ApiClientError ? err.message : 'Failed to load presentation')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadSpec()
+
     // The locking baseline lives on the presentation row, not the spec.
     presentationsApi
       .get(id)
@@ -501,14 +578,7 @@ export default function EditorPage() {
         if (!cancelled) setInitialUpdatedAt(row.updated_at)
       })
       .catch(() => { /* non-critical: locking just stays disabled */ })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof ApiClientError ? err.message : 'Failed to load presentation')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+
     // The caller's role over this presentation (owner/admin/editor can edit;
     // viewers are read-only and should not see the Quick AI edit entry points).
     presentationsApi
