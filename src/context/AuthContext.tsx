@@ -58,6 +58,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // 30-day sessions: silently rotate the Supabase refresh token whenever the
+  // access token is close to expiry. Sessions only end on Sign Out.
+  useEffect(() => {
+    const REFRESH_MARGIN_MS = 10 * 60 * 1000;
+    const tick = async () => {
+      let refreshToken: string | null = null;
+      try {
+        refreshToken = localStorage.getItem("slideai.refresh_token");
+      } catch {
+        refreshToken = null;
+      }
+      if (!refreshToken) return;
+      const expiresAt = Number(localStorage.getItem("slideai.token_expires_at") || 0);
+      if (expiresAt && Date.now() < expiresAt - REFRESH_MARGIN_MS) return;
+      try {
+        const res = await authApi.refresh(refreshToken);
+        if (res.access_token && res.refresh_token) {
+          storeTokens({
+            access_token: res.access_token,
+            refresh_token: res.refresh_token,
+            token_type: "bearer",
+            expires_in: res.expires_in ?? null,
+          });
+        }
+      } catch {
+        /* keep the current session; the next 401 forces a new login */
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 5 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const signIn = async (email: string, password: string) => {
     const res = await authApi.signIn(email, password);
     storeTokens(res.tokens);

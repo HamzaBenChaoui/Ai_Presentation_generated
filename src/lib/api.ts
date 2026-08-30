@@ -50,6 +50,10 @@ export function getRefreshToken(): string | null {
 export function storeTokens(tokens: Tokens): void {
   localStorage.setItem(TOKEN_KEY, tokens.access_token);
   localStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+  localStorage.setItem(
+    "slideai.token_expires_at",
+    String(Date.now() + (tokens.expires_in ?? 3600) * 1000),
+  );
 }
 
 export function clearTokens(): void {
@@ -71,11 +75,44 @@ export class ApiClientError extends Error {
   }
 }
 
+let refreshingPromise: Promise<boolean> | null = null;
+
+/** Silent session refresh using the stored refresh token. */
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshingPromise) return refreshingPromise;
+  refreshingPromise = (async () => {
+    let refreshToken: string | null = null;
+    try {
+      refreshToken = localStorage.getItem(REFRESH_KEY);
+    } catch {
+      refreshToken = null;
+    }
+    if (!refreshToken) return false;
+    try {
+      const res = await authApi.refresh(refreshToken);
+      if (!res.access_token || !res.refresh_token) return false;
+      storeTokens({
+        access_token: res.access_token,
+        refresh_token: res.refresh_token,
+        token_type: "bearer",
+        expires_in: res.expires_in ?? null,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const ok = await refreshingPromise;
+  refreshingPromise = null;
+  return ok;
+}
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
   token?: string | null,
+  _retried = false,
 ): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   // Attach the stored access token automatically unless one is passed in.
@@ -92,6 +129,12 @@ async function request<T>(
   const data = text ? JSON.parse(text) : null;
 
   if (!res.ok) {
+    // Silent refresh once on 401 for non-auth endpoints, then retry.
+    if (res.status === 401 && !_retried && !path.startsWith("/auth/")) {
+      if (await tryRefreshSession()) {
+        return request<T>(method, path, body, token, true);
+      }
+    }
     const err = (data ?? {}) as ApiError;
     throw new ApiClientError(
       res.status,
@@ -104,6 +147,14 @@ async function request<T>(
 }
 
 export const authApi = {
+  /** Rotate a Supabase refresh token into a fresh session. */
+  refresh(refreshToken: string) {
+    return request<{ access_token: string; refresh_token: string; expires_in: number | null }>(
+      "POST",
+      "/auth/refresh",
+      { refresh_token: refreshToken },
+    );
+  },
   signUp(email: string, password: string, fullName?: string) {
     return request<AuthResponse>("POST", "/auth/signup", {
       email,
@@ -125,7 +176,7 @@ export const authApi = {
   updateDisplayName(fullName: string) {
     return request<User>("PATCH", "/auth/me", { full_name: fullName });
   },
-  /** Mint a personal 72h access token for MCP clients. */
+  /** Mint a personal 30-day access token for MCP clients. */
   mcpToken() {
     return request<{ access_token: string; token_type: string; expires_in: number; purpose: string }>(
       "POST",

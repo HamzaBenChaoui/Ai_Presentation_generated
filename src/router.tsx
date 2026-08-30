@@ -22,6 +22,7 @@ import EditorPage from './pages/EditorPage'
 import PresentPage from './pages/PresentPage'
 import SharedPage from './pages/SharedPage'
 import PresentNotesPage from './pages/PresentNotesPage'
+import OAuthAuthorizePage from './pages/OAuthAuthorizePage'
 import NotFoundPage from './pages/NotFoundPage'
 import WorkspacesPage from './pages/WorkspacesPage'
 import WorkspaceDetailPage from './pages/WorkspaceDetailPage'
@@ -99,6 +100,7 @@ export const router = createBrowserRouter([
           { path: 'workspaces/:id', element: <WorkspaceDetailPage /> },
           { path: 'settings', element: <SettingsPage /> },
           { path: 'mcp', element: <McpPage /> },
+          { path: 'oauth/authorize', element: <OAuthAuthorizePage /> },
         ],
       },
       {
