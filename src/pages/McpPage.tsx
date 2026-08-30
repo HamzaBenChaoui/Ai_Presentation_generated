@@ -37,7 +37,7 @@ const MCP_TOOLS: { name: string; description: string }[] = [
 
 // ── Per-client setup snippets ───────────────────────────────────────────────
 
-type ClientKey = 'claude-code' | 'cursor' | 'opencode' | 'codex' | 'zcode'
+type ClientKey = 'zkr' | 'claude-code' | 'cursor' | 'opencode' | 'codex' | 'zcode'
 
 interface ClientSetup {
   key: ClientKey
@@ -51,6 +51,27 @@ interface ClientSetup {
 
 function buildSetups(url: string, token: string): Record<ClientKey, ClientSetup> {
   return {
+    // ZKR first — same protocol/config as Claude Code, the CLI just starts
+    // with `zkr` instead of `claude`.
+    zkr: {
+      key: 'zkr',
+      label: 'ZKR',
+      file: '.mcp.json  (racine du projet)',
+      cli: {
+        label: 'Ou en une commande :',
+        command: `zkr mcp add --transport http slide-ai ${url} --header "Authorization: Bearer ${token}"`,
+      },
+      format: 'json',
+      config: JSON.stringify(
+        {
+          mcpServers: {
+            'slide-ai': { type: 'http', url, headers: { Authorization: `Bearer ${token}` } },
+          },
+        },
+        null,
+        2,
+      ),
+    },
     'claude-code': {
       key: 'claude-code',
       label: 'Claude Code',
@@ -190,7 +211,7 @@ export default function McpPage() {
   )
   const [showToken, setShowToken] = useState(false)
   const [token, setToken] = useState(storedToken)
-  const [tab, setTab] = useState<ClientKey>('claude-code')
+  const [tab, setTab] = useState<ClientKey>('zkr')
   const [minting, setMinting] = useState(false)
   const [mintError, setMintError] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
@@ -240,8 +261,8 @@ export default function McpPage() {
           Connecte tes outils IA à Slide AI
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-text-muted">
-          Slide AI expose un serveur MCP : Claude Code, Cursor, OpenCode, Codex, ZCode et
-          autres agents compatibles peuvent lister, créer, générer et modifier tes présentations
+          Slide AI expose un serveur MCP : ZKR, Claude Code, Cursor, OpenCode, Codex,
+          ZCode et autres agents compatibles peuvent lister, créer, générer et modifier tes présentations
           directement depuis leur chat — comme s&apos;ils avaient des mains dans l&apos;app.
         </p>
       </motion.div>
