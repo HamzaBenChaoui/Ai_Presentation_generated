@@ -1,6 +1,7 @@
 import type { PresentationSpec } from '../../types'
 import { defaultTokens, tokenFor } from './theme'
 import { useDeckTheme } from './DeckThemeContext'
+import { applyBrandKit, useBrandKit } from '../../context/BrandKitContext'
 import { ActiveSlideIndexProvider } from './ElementRenderer'
 import SlideRenderer from './SlideRenderer'
 
@@ -23,7 +24,8 @@ export default function PresentationRenderer({ spec, activeIndex, fullscreen }: 
   // otherwise fall back to the spec's stored theme name. useDeckTheme returns
   // a safe default when no provider is present.
   const deck = useDeckTheme()
-  const tokens = deck?.tokens || tokenFor(spec.meta?.theme)
+  const { brand } = useBrandKit()
+  const tokens = applyBrandKit(deck?.tokens || tokenFor(spec.meta?.theme), brand)
 
   if (fullscreen && activeIndex !== undefined) {
     const slide = spec.slides[activeIndex]

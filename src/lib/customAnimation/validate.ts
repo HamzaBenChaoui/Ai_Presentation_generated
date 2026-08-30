@@ -22,12 +22,20 @@ export interface CustomAnimationDef {
   keyframes: string
   duration: number
   easing?: string
+  // Extra delay (ms) before the animation starts.
+  delay?: number
+  // Repeat count — a positive integer or the literal "infinite".
+  loop?: number | 'infinite'
 }
 
 export interface ValidatedCustomAnimation {
   name: string
   durationMs: number
   easing: string
+  // Extra delay (ms) before the animation starts.
+  delayMs: number
+  // CSS animation-iteration-count (integer or 'infinite').
+  iterations: number | 'infinite'
   // Canonical, sanitized @keyframes CSS — the ONLY thing that reaches the DOM.
   css: string
 }
@@ -232,7 +240,11 @@ export function validateCustomAnimation(
   const css = sanitizeKeyframes(name, String(def.keyframes ?? ''))
   if (!css) return null
 
-  return { name, durationMs: ms, easing, css }
+  const delayMs = Math.min(Math.max(Math.round(Number(def.delay) || 0), 0), 5000)
+  const iterations =
+    def.loop === 'infinite' ? 'infinite' : Math.min(Math.max(Math.round(Number(def.loop) || 1), 1), 50)
+
+  return { name, durationMs: ms, easing, delayMs, iterations, css }
 }
 
 /**

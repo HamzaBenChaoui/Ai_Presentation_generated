@@ -10,6 +10,9 @@ export interface AppSettings {
   defaultLanguage: string
   autosaveDelay: number
   animationsEnabled: boolean
+  // Model the user picked for Slide AI (settings page / AI panel).
+  // Empty string = use the backend's default model.
+  aiModel: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -19,6 +22,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultLanguage: 'English',
   autosaveDelay: 3,
   animationsEnabled: true,
+  aiModel: '',
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,6 +64,10 @@ export function getSettings(): AppSettings {
         typeof parsed.animationsEnabled === 'boolean'
           ? parsed.animationsEnabled
           : DEFAULT_SETTINGS.animationsEnabled,
+      aiModel:
+        typeof parsed.aiModel === 'string'
+          ? parsed.aiModel
+          : DEFAULT_SETTINGS.aiModel,
     }
   } catch {
     return { ...DEFAULT_SETTINGS }

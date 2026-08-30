@@ -29,6 +29,9 @@ export interface LayoutProps {
 function splitElements(slide: SlideSpec) {
   const byType: Record<string, SpecElement[]> = {}
   for (const el of slide.elements) {
+    // Free-positioned (Canvas-style) elements are rendered by the overlay
+    // layer in SlideRenderer, never inside the layout flow.
+    if (el.x != null && el.y != null) continue
     ;(byType[el.type] ||= []).push(el)
   }
   return byType
@@ -68,6 +71,13 @@ export function Title({ slide, tokens = defaultTokens }: LayoutProps) {
       {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
     </div>
   )
+}
+
+// Completely empty canvas — manually inserted (free-positioned) elements are
+// rendered on top by the overlay layer. The starting point for decks built
+// from scratch.
+export function Blank({ slide: _slide, tokens: _tokens = defaultTokens }: LayoutProps) {
+  return <div style={{ height: '100%' }} />
 }
 
 export function Agenda({ slide, tokens = defaultTokens }: LayoutProps) {

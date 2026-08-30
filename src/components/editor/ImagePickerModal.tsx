@@ -14,12 +14,15 @@ import type { AssetItem } from '../../lib/api'
 interface Props {
   open: boolean
   onClose: () => void
-  onInsert: (src: string, alt: string) => void
+  onInsert: (src: string, alt: string, fileId?: string | null) => void
+  /** Which media kind to accept for uploads. */
+  accept?: 'image' | 'video' | 'audio'
+  title?: string
 }
 
 type Tab = 'upload' | 'library'
 
-export default function ImagePickerModal({ open, onClose, onInsert }: Props) {
+export default function ImagePickerModal({ open, onClose, onInsert, accept = 'image', title }: Props) {
   const { toast } = useToast()
   const [tab, setTab] = useState<Tab>('upload')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -72,7 +75,7 @@ export default function ImagePickerModal({ open, onClose, onInsert }: Props) {
       setUploading(true)
       const asset = await filesApi.upload(file)
       const { url } = await filesApi.url(asset.id)
-      onInsert(url, asset.filename)
+      onInsert(url, asset.filename, asset.id)
       onClose()
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : 'Upload failed'
@@ -85,7 +88,7 @@ export default function ImagePickerModal({ open, onClose, onInsert }: Props) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <Modal open={open} onClose={onClose} title="Insert image" className="max-w-2xl">
+    <Modal open={open} onClose={onClose} title={title ?? 'Insert image'} className="max-w-2xl">
       <div className="flex flex-col gap-4">
         {/* Tabs */}
         <div className="inline-flex rounded-lg border border-border bg-bg p-1 self-start">
@@ -146,7 +149,7 @@ export default function ImagePickerModal({ open, onClose, onInsert }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept={accept === 'video' ? 'video/mp4,video/webm' : accept === 'audio' ? 'audio/mpeg,audio/wav,audio/ogg,audio/mp4' : 'image/*'}
               className="hidden"
               onChange={(e) => {
                 handleFile(e.target.files?.[0])

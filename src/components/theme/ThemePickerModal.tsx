@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Check, ArrowRight, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { generationApi, ApiClientError } from '../../lib/api'
+import { getSettings } from '../../lib/settings'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../ui/Toast'
 import { themeMap, type ThemeName } from '../renderer/theme'
@@ -70,7 +71,7 @@ function demoSpec(theme: ThemeName): PresentationSpec {
 export default function ThemePickerModal({ prompt, slideCount, tone, language, onBack }: Props) {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const [selected, setSelected] = useState<ThemeName>('modern')
+  const [selected, setSelected] = useState<ThemeName>('custom')
   const [generating, setGenerating] = useState(false)
 
   const themeEntries = useMemo(() => {
@@ -91,6 +92,7 @@ export default function ThemePickerModal({ prompt, slideCount, tone, language, o
         tone,
         language,
         theme: selected,
+        model: getSettings().aiModel || null,
       })
       navigate(`/editor/${created.id}`)
     } catch (err) {

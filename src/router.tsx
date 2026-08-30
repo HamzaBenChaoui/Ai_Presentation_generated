@@ -21,12 +21,14 @@ import DashboardPage from './pages/DashboardPage'
 import EditorPage from './pages/EditorPage'
 import PresentPage from './pages/PresentPage'
 import SharedPage from './pages/SharedPage'
+import PresentNotesPage from './pages/PresentNotesPage'
 import NotFoundPage from './pages/NotFoundPage'
 import WorkspacesPage from './pages/WorkspacesPage'
 import WorkspaceDetailPage from './pages/WorkspaceDetailPage'
 import TemplatesPage from './pages/TemplatesPage'
 import AssetsPage from './pages/AssetsPage'
 import SettingsPage from './pages/SettingsPage'
+import McpPage from './pages/McpPage'
 
 /* ------------------------------------------------------------------ */
 /*  Auth guard                                                         */
@@ -96,6 +98,7 @@ export const router = createBrowserRouter([
           { path: 'workspaces', element: <WorkspacesPage /> },
           { path: 'workspaces/:id', element: <WorkspaceDetailPage /> },
           { path: 'settings', element: <SettingsPage /> },
+          { path: 'mcp', element: <McpPage /> },
         ],
       },
       {
@@ -113,6 +116,7 @@ export const router = createBrowserRouter([
     element: <FullscreenShell />,
     children: [
       { path: 'shared/:token', element: <SharedPage /> },
+      { path: 'present-notes', element: <PresentNotesPage /> },
     ],
   },
 

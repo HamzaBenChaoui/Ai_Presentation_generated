@@ -1,11 +1,13 @@
 import type { SlideSpec, CustomAnimationDef } from '../../types'
 import type { ReactElement } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { defaultTokens, tokenFor, type RenderTokens } from './theme'
 import * as Layouts from './Layouts'
 import type { LayoutProps } from './Layouts'
 import { SlideActiveContext } from './slideContext'
 import AmbientBackground from './AmbientBackground'
 import CustomCodeFrame from './CustomCodeFrame'
+import FreeElementLayer from './FreeElementLayer'
 import { CustomAnimationsProvider } from './CustomAnimationsContext'
 
 const registry: Record<string, (p: LayoutProps) => ReactElement> = {
@@ -47,6 +49,45 @@ const registry: Record<string, (p: LayoutProps) => ReactElement> = {
 export function slideLayout(name?: string): (p: LayoutProps) => ReactElement {
   return registry[name || ''] || Layouts.Title
 }
+/**
+ * PowerPoint-style auto-fit: if the slide's flow content is taller than the
+ * slide, scale it down (min 55%) so nothing is silently clipped.
+ */
+function useAutoFitScale(): { ref: React.RefObject<HTMLDivElement | null>; style: React.CSSProperties } {
+  const ref = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fit = () => {
+      const overflow = el.scrollHeight - el.clientHeight
+      if (overflow > 4) {
+        const s = Math.max(0.55, el.clientHeight / el.scrollHeight)
+        setScale(s)
+      } else {
+        setScale(1)
+      }
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return {
+    ref,
+    style: {
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      transform: scale < 1 ? `scale(${scale})` : undefined,
+      transformOrigin: 'top left',
+      width: scale < 1 ? `${100 / scale}%` : undefined,
+    },
+  }
+}
 
 interface Props {
   slide: SlideSpec
@@ -63,11 +104,14 @@ interface Props {
   // Fullscreen/present mode: removes the rounded corners and border so the
   // slide can edge-to-edge cover the viewport.
   presentation?: boolean
+  // Pure-content rendering (slide thumbnails): no editing chrome, no
+  // ambient background (30 WebGL contexts would melt thumbnails).
+  nonInteractive?: boolean
 }
 
 // Renders a single slide. The renderer auto-selects the layout from the
 // spec and applies the slide-level background / theme. 16:9, responsive.
-export default function SlideRenderer({ slide, themeName, background, tokens = defaultTokens, customAnimations, active = true, presentation = false }: Props) {
+export default function SlideRenderer({ slide, themeName, background, tokens = defaultTokens, customAnimations, active = true, presentation = false, nonInteractive = false }: Props) {
   const tk = tokens || tokenFor(themeName)
   const bg = background || slide.background || undefined
 
@@ -93,6 +137,7 @@ export default function SlideRenderer({ slide, themeName, background, tokens = d
   }
 
   const Layout = slideLayout(slide.layout)
+  const { ref: fitRef, style: fitStyle } = useAutoFitScale()
   // Image backgrounds already fill the slide — the ambient layer would sit on
   // top of the photo, so skip it for url()/data: backgrounds.
   const isImageBg = bg ? /url\(|^data:/i.test(bg) : false
@@ -116,10 +161,12 @@ export default function SlideRenderer({ slide, themeName, background, tokens = d
           flexDirection: 'column',
         }}
       >
-        {!isImageBg && <AmbientBackground spec={tk.ambient} />}
-        <div style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {!isImageBg && !nonInteractive && <AmbientBackground spec={tk.ambient} />}
+        <div ref={fitRef} style={{ ...fitStyle, position: 'relative', zIndex: 1 }}>
           <Layout slide={slide} tokens={tk} active={active} />
         </div>
+        {/* Free-positioned (Canvas-style) elements float above the layout. */}
+        <FreeElementLayer slide={slide} tokens={tk} active={active} forceStatic={nonInteractive} />
         </div>
       </SlideActiveContext.Provider>
     </CustomAnimationsProvider>

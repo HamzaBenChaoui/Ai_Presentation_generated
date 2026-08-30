@@ -193,24 +193,42 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
             {shares.map((share) => (
               <div
                 key={share.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-surface2 p-3"
+                className="rounded-lg border border-border bg-surface2 p-3"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  {share.visibility === 'public' && <Globe size={14} className="text-text-dim shrink-0" />}
-                  {share.visibility === 'password' && <Lock size={14} className="text-text-dim shrink-0" />}
-                  {share.visibility === 'private' && <Key size={14} className="text-text-dim shrink-0" />}
-                  <span className="text-xs text-text-dim truncate">
-                    {window.location.origin}/shared/{share.token}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {share.visibility === 'public' && <Globe size={14} className="text-text-dim shrink-0" />}
+                    {share.visibility === 'password' && <Lock size={14} className="text-text-dim shrink-0" />}
+                    {share.visibility === 'private' && <Key size={14} className="text-text-dim shrink-0" />}
+                    <span className="text-xs text-text-dim truncate">
+                      {window.location.origin}/shared/{share.token}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" title="Copy link" onClick={() => handleCopy(share.token)}>
+                      <Copy size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" title="Remove link" onClick={() => handleRemove(share.token)}>
+                      <X size={14} />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  <Button variant="ghost" size="icon" title="Copy link" onClick={() => handleCopy(share.token)}>
-                    <Copy size={14} />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="Remove link" onClick={() => handleRemove(share.token)}>
-                    <X size={14} />
-                  </Button>
+                <div className="flex items-center gap-3 mt-1.5 text-[11px] text-text-dim">
+                  <span title="Views">👁 {share.view_count ?? 0}</span>
+                  {share.comments && share.comments.length > 0 && (
+                    <span title="Reviewer comments">💬 {share.comments.length}</span>
+                  )}
                 </div>
+                {share.comments && share.comments.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
+                    {share.comments.slice(-5).map((c, ci) => (
+                      <div key={c.id ?? ci} className="text-xs">
+                        <span className="font-semibold text-text">{c.author_name || 'Anonymous'}:</span>{' '}
+                        <span className="text-text-muted">{c.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

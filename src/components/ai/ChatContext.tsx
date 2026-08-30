@@ -10,10 +10,17 @@ import {
 import { chatApi } from '../../lib/api'
 import type { ChatMessage, PresentationSpec, ToolStep } from '../../types'
 import { useEditor } from '../editor/EditorContext'
+import { getSettings } from '../../lib/settings'
+import { captureSlideScreenshot } from '../../lib/captureSlide'
+import { collectSlideDiagnostics } from '../../lib/slideDiagnostics'
+
+
 
 // --- types -------------------------------------------------------------------
 
 interface ChatContextValue {
+  /** Abort the in-flight AI request (Stop button). */
+  stop: () => void
   messages: ChatMessage[]
   loading: boolean
   streaming: boolean
@@ -60,6 +67,12 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
 
   const lastUserTextRef = useRef<string>('')
   const mountedRef = useRef(true)
+  const abortRef = useRef<AbortController | null>(null)
+
+  /** Cancel the in-flight AI request. */
+  const stop = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
 
   // --- load history on mount ---
 
@@ -114,7 +127,26 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
     const toolSteps: ToolStep[] = []
 
     try {
-      const stream = chatApi.stream(presentationId, text, currentSlideIndex)
+      // Live screenshot of the current slide (best-effort) + the user's model
+      // choice (settings page / AI panel header); empty string = backend
+      // default. The backend drops the screenshot for text-only models.
+      const screenshot = await captureSlideScreenshot()
+      // Measured geometry problems on the slide being viewed — gives the
+      // model ground truth about layout issues without vision.
+      const diagnostics = collectSlideDiagnostics(
+        document.getElementById('editor-slide-capture'),
+      )
+      const abort = new AbortController()
+      abortRef.current = abort
+      const stream = chatApi.stream(
+        presentationId,
+        text,
+        currentSlideIndex,
+        getSettings().aiModel || null,
+        screenshot,
+        diagnostics,
+        abort.signal,
+      )
 
       for await (const { event, data } of stream) {
         if (!mountedRef.current) return
@@ -219,11 +251,28 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
       }
     } catch (err) {
       if (!mountedRef.current) return
-      const msg = err instanceof Error ? err.message : 'AI chat failed'
-      setError(msg)
-      // Remove the streaming placeholder
-      setMessages(prev => prev.filter(m => m.id !== streamPlaceholder.id))
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // User pressed Stop — keep whatever was streamed as the final answer.
+        setMessages(prev => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last?.id === streamPlaceholder.id) {
+            updated[updated.length - 1] = {
+              ...last,
+              content: ((fullContent || '') + ' — (stopped)').trim(),
+              tool_steps: toolSteps.length > 0 ? [...toolSteps] : undefined,
+            }
+          }
+          return updated
+        })
+      } else {
+        const msg = err instanceof Error ? err.message : 'AI chat failed'
+        setError(msg)
+        // Remove the streaming placeholder
+        setMessages(prev => prev.filter(m => m.id !== streamPlaceholder.id))
+      }
     } finally {
+      abortRef.current = null
       setStreaming(false)
     }
   }, [presentationId, streaming, currentSlideIndex, onSpecUpdate, applyAiEdit])
@@ -281,7 +330,7 @@ export function ChatProvider({ children, presentationId, currentSlideIndex, onSp
 
   return (
     <ChatContext.Provider
-      value={{ messages, loading, streaming, error, accessRole, canEdit, send, editMessage, clear, retryLast, reload }}
+      value={{ messages, loading, streaming, error, accessRole, canEdit, send, editMessage, clear, retryLast, reload, stop }}
     >
       {children}
     </ChatContext.Provider>

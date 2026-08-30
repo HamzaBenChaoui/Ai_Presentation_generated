@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { aiEditApi, ApiClientError } from '../../lib/api'
+import { getSettings } from '../../lib/settings'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { Input } from '../ui/Input'
@@ -35,7 +36,10 @@ export default function QuickAiEditModal({ open, onClose, presentationId }: Quic
       .map((s) => Number(s))
       .filter((n) => Number.isInteger(n) && n >= 0)
 
-    const req: { instruction: string; target_indexes?: number[] } = { instruction: trimmed }
+    const req: { instruction: string; target_indexes?: number[]; model?: string | null } = {
+      instruction: trimmed,
+      model: getSettings().aiModel || null,
+    }
     if (parsed.length > 0) req.target_indexes = parsed
 
     setRunning(true)

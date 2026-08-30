@@ -67,7 +67,7 @@ export const fonts = {
 // --- the 15 themes ----------------------------------------------------------
 
 export type ThemeName =
-  | 'modern' | 'corporate' | 'startup' | 'education' | 'medical'
+  | 'custom' | 'modern' | 'corporate' | 'startup' | 'education' | 'medical'
   | 'finance' | 'luxury' | 'minimal' | 'glass' | 'dark'
   | 'neon' | 'apple' | 'google' | 'microsoft' | 'openai'
 
@@ -77,6 +77,22 @@ interface ThemeDef {
 }
 
 const themes: Record<ThemeName, ThemeDef> = {
+  // Declared first so 'custom' heads every theme list. Its job is not to
+  // impose a look but to unlock the AI's full creative freedom mode: decks
+  // generated under it are mostly custom-coded slides with authored
+  // animations (see the backend CUSTOM CREATIVE MODE prompts).
+  custom: {
+    label: 'Custom',
+    tokens: {
+      bg: '#0a0a10', surface: 'rgba(255,255,255,0.05)', surface2: 'rgba(255,255,255,0.08)',
+      border: 'rgba(255,255,255,0.14)', text: '#f5f5fa', textMuted: '#9a9ab4', textDim: '#65657e',
+      accent: '#a78bfa', accent2: '#22d3ee', accent3: '#f472b6',
+      fontHeading: fonts.display, fontBody: fonts.sans,
+      radius: '16px', radiusLg: '26px', gradient: 'linear-gradient(135deg, #a78bfa, #22d3ee)',
+      cardShadow: '0 24px 60px rgba(0,0,0,0.45)', buttonRadius: '999px',
+      energy: 'bold', ambient: { kind: 'particles', colors: ['#a78bfa', '#22d3ee'], opacity: 0.12, speed: 40 },
+    },
+  },
   modern: {
     label: 'Modern',
     tokens: {

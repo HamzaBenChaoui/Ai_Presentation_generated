@@ -87,7 +87,7 @@ export interface FileList {
 // --- Phase 7: Presentation Specification (structured, not HTML) ---
 
 export type LayoutName =
-  | 'hero' | 'title' | 'agenda' | 'section' | 'timeline'
+  | 'hero' | 'title' | 'blank' | 'agenda' | 'section' | 'timeline'
   | 'comparison' | 'cards' | 'statistics' | 'pricing' | 'gallery'
   | 'process' | 'flow' | 'roadmap' | 'team' | 'quote' | 'swot'
   | 'table' | 'chart' | 'image-left' | 'image-right' | 'cta'
@@ -105,19 +105,54 @@ export interface CustomSlideCode {
 }
 
 export type ElementType =
-  | 'title' | 'subtitle' | 'paragraph' | 'bullets' | 'image'
+  | 'title' | 'subtitle' | 'paragraph' | 'bullets' | 'image' | 'video' | 'audio'
+  | 'shape'
   | 'cards' | 'timeline' | 'comparison' | 'quote' | 'statistics'
   | 'code' | 'table' | 'diagram' | 'icon'
+
+// Optional per-element style overrides (structured layouts). Anything unset
+// inherits from the theme tokens.
+export interface ElementStyle {
+  color?: string
+  fontSize?: string
+  fontWeight?: string
+  align?: 'left' | 'center' | 'right' | 'justify'
+  opacity?: number
+  rotation?: number
+}
 
 export interface SpecElement {
   id?: string | null
   type: ElementType
   animation?: string | null
+  // Extra delay (ms) before this element's entrance animation starts.
+  animationDelay?: number | null
+  // Per-element style overrides.
+  style?: ElementStyle | null
+  // Free (Canvas-style) placement in percent of the slide size. When set,
+  // the element floats over the slide instead of flowing inside the layout.
+  x?: number | null
+  y?: number | null
+  // Fixed width in percent of the slide width (text wrap / image sizing).
+  w?: number | null
+  // Fixed height in percent of the slide height (shapes / media).
+  h?: number | null
   text?: string
   level?: number
   items?: any[]
   src?: string | null
+  // Stable reference to an uploaded file — src is re-resolved fresh because
+  // signed URLs expire.
+  fileId?: string | null
   alt?: string
+  // Light image controls.
+  flip?: boolean
+  objectPosition?: string
+  poster?: string | null
+  autoplay?: boolean
+  // Shape elements.
+  shape?: 'rect' | 'circle' | 'line' | 'arrow'
+  fill?: string | null
   caption?: string | null
   language?: string
   code?: string
@@ -154,6 +189,10 @@ export interface CustomAnimationDef {
   duration: number
   // Timing function — a cubic-bezier(...), steps(...) or non-linear keyword.
   easing?: string
+  // Extra delay (ms) before the animation starts.
+  delay?: number
+  // Repeat count — a positive integer or the literal "infinite".
+  loop?: number | 'infinite'
 }
 
 export interface PresentationMeta {

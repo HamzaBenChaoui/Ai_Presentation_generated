@@ -13,6 +13,9 @@ import {
   ArrowRight,
   LayoutDashboard,
   FileText,
+  FilePlus2,
+  Search,
+  FileDown,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -30,9 +33,11 @@ import { useAuth } from '../context/AuthContext'
 import {
   presentationsApi,
   filesApi,
+  specApi,
+  importApi,
   ApiClientError,
 } from '../lib/api'
-import type { Presentation, FileAsset } from '../types'
+import type { Presentation, FileAsset, PresentationSpec } from '../types'
 import { getSettings } from '../lib/settings'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -194,6 +199,19 @@ export default function DashboardPage() {
 
   // Data state
   const [presentations, setPresentations] = useState<Presentation[]>([])
+  const [deckQuery, setDeckQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importSource, setImportSource] = useState<'markdown' | 'url'>('markdown')
+  const [importContent, setImportContent] = useState('')
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+
+  const visibleDecks = deckQuery.trim()
+    ? presentations.filter((d) =>
+        (d.title || '').toLowerCase().includes(deckQuery.trim().toLowerCase()),
+      )
+    : presentations
   const [files, setFiles] = useState<FileAsset[]>([])
   const [loadingDecks, setLoadingDecks] = useState(true)
   const [loadingFiles, setLoadingFiles] = useState(true)
@@ -244,10 +262,76 @@ export default function DashboardPage() {
 
   // ── Handlers ───────────────────────────────────────────────────────────
 
+  /** Deep search (title + description + slide content) via the backend. */
+  useEffect(() => {
+    const q = deckQuery.trim()
+    if (q.length < 3) return
+    const id = setTimeout(() => {
+      setSearching(true)
+      presentationsApi
+        .search(q)
+        .then((res) => setPresentations(res.items))
+        .catch(() => {})
+        .finally(() => setSearching(false))
+    }, 400)
+    return () => clearTimeout(id)
+  }, [deckQuery])
+
+  async function handleImport() {
+    const trimmed = importContent.trim()
+    const url = importUrl.trim()
+    if (importSource === 'markdown' && !trimmed) {
+      toast.error('Paste some markdown first.')
+      return
+    }
+    if (importSource === 'url' && !/^https?:\/\//i.test(url)) {
+      toast.error('Enter a valid http(s) URL.')
+      return
+    }
+    setImporting(true)
+    try {
+      const created = await importApi.run({
+        source: importSource,
+        content: importSource === 'markdown' ? trimmed : null,
+        url: importSource === 'url' ? url : null,
+        language: getSettings().defaultLanguage || 'English',
+        model: getSettings().aiModel || null,
+      })
+      toast.success('Deck created from imported material.')
+      navigate(`/editor/${created.id}`)
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Import failed')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   function handleGenerate() {
     const trimmed = prompt.trim()
     if (!trimmed) return
     setShowThemePicker(true)
+  }
+
+  /** Create an empty deck and open it in the editor for manual design. */
+  async function handleCreateBlank() {
+    try {
+      const created = await presentationsApi.create('Untitled presentation')
+      const blankSpec: PresentationSpec = {
+        meta: {
+          title: 'Untitled presentation',
+          theme: null,
+          background: null,
+          language: getSettings().defaultLanguage || 'English',
+          tone: getSettings().defaultTone || 'Professional',
+        },
+        slides: [{ layout: 'blank', elements: [] }],
+      }
+      await specApi.update(created.id, blankSpec)
+      navigate(`/editor/${created.id}`)
+    } catch (err) {
+      if (err instanceof ApiClientError) toast.error(err.message)
+      else toast.error('Could not create the presentation')
+    }
   }
 
   async function confirmDelete() {
@@ -437,6 +521,16 @@ export default function DashboardPage() {
             </div>
 
             <Button
+              variant="outline"
+              size="lg"
+              onClick={handleCreateBlank}
+              title="Start from an empty canvas"
+            >
+              <FilePlus2 size={16} />
+              Blank deck
+            </Button>
+
+            <Button
               variant="primary"
               size="lg"
               disabled={!prompt.trim()}
@@ -469,6 +563,26 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+            <input
+              value={deckQuery}
+              onChange={(e) => setDeckQuery(e.target.value)}
+              placeholder="Search decks and content…"
+              className="h-9 w-64 pl-9 pr-3 rounded-xl border border-border bg-surface/60 text-sm text-text placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+          <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-xl border border-border text-xs font-medium text-text-muted hover:text-accent hover:border-accent/40 transition-colors cursor-pointer"
+          >
+            <FileDown size={14} />
+            Import
+          </button>
+          {searching && <span className="text-xs text-text-dim">searching…</span>}
+        </div>
+
         {loadingDecks ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -481,7 +595,7 @@ export default function DashboardPage() {
               </Card>
             ))}
           </div>
-        ) : presentations.length === 0 ? (
+        ) : visibleDecks.length === 0 ? (
           <EmptyState
             icon={PresentationIcon}
             title="No presentations yet"
@@ -494,7 +608,7 @@ export default function DashboardPage() {
             animate="visible"
           >
             <AnimatePresence>
-              {presentations.map((deck, i) => (
+              {visibleDecks.map((deck, i) => (
                 <motion.div
                   key={deck.id}
                   custom={i}
@@ -675,6 +789,66 @@ export default function DashboardPage() {
           )}
         </AnimatePresence>
       </motion.section>
+
+      {/* Import modal */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={() => setImportOpen(false)}>
+          <div className="w-full max-w-xl rounded-2xl border border-border bg-surface p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-text mb-1">
+              Import material
+            </h3>
+            <p className="text-xs text-text-dim mb-4">
+              Paste markdown (or fetch a web page) — Slide AI structures a deck around your content.
+            </p>
+            <div className="flex gap-1.5 mb-3">
+              {(['markdown', 'url'] as const).map((src) => (
+                <button
+                  key={src}
+                  onClick={() => setImportSource(src)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    importSource === src
+                      ? 'border-accent/50 bg-accent/10 text-accent'
+                      : 'border-border text-text-dim hover:text-text'
+                  }`}
+                >
+                  {src === 'markdown' ? 'Markdown' : 'Web page URL'}
+                </button>
+              ))}
+            </div>
+            {importSource === 'markdown' ? (
+              <textarea
+                value={importContent}
+                onChange={(e) => setImportContent(e.target.value)}
+                placeholder="Paste your markdown here…"
+                className="w-full min-h-[180px] rounded-xl border border-border bg-bg p-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            ) : (
+              <input
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                placeholder="https://example.com/article"
+                className="w-full h-10 rounded-xl border border-border bg-bg px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setImportOpen(false)}
+                className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-dim hover:text-text cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importing}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50 cursor-pointer"
+              >
+                {importing && <Spinner size="sm" />}
+                Create deck
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Theme picker overlay */}
       <AnimatePresence>

@@ -15,6 +15,7 @@ import {
   Play,
   Share2,
   Sparkles,
+  Stethoscope,
 } from 'lucide-react'
 import { specApi, exportApi, presentationsApi, ApiClientError, type ExportFormat } from '../lib/api'
 import type { PresentationSpec } from '../types'
@@ -25,19 +26,25 @@ import { useToast } from '../components/ui/Toast'
 import { EditorProvider, useEditor } from '../components/editor/EditorContext'
 import { useEditorShortcuts } from '../components/editor/useEditorShortcuts'
 import QuickAiEditModal from '../components/editor/QuickAiEditModal'
+import DeckDoctorModal from '../components/editor/DeckDoctorModal'
+import CanvasToolbar from '../components/editor/CanvasToolbar'
+import MotionPanel from '../components/editor/MotionPanel'
+import SmartAiMenu from '../components/editor/SmartAiMenu'
 import AiEditorPanel from '../components/ai/AiEditorPanel'
 import { ChatProvider } from '../components/ai/ChatContext'
 import HistoryPanel from '../components/editor/HistoryPanel'
 import PresentationRenderer from '../components/renderer/PresentationRenderer'
+import SlideRenderer from '../components/renderer/SlideRenderer'
 import FullscreenPlayer from '../components/renderer/FullscreenPlayer'
-import { DeckThemeProvider } from '../components/renderer/DeckThemeContext'
+import { DeckThemeProvider, useDeckTheme } from '../components/renderer/DeckThemeContext'
+import type { SlideSpec, CustomAnimationDef } from '../types'
 import ShareModal from '../components/ShareModal'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type InspectorTab = 'ai' | 'history'
+type InspectorTab = 'ai' | 'motion' | 'history'
 
 // --- Resizable inspector sidebar --------------------------------------------
 const INSPECTOR_WIDTH_KEY = 'slideai.inspector.width'
@@ -120,10 +127,37 @@ const EditorBridge = forwardRef<EditorBridgeHandle>(function EditorBridge(_props
 // Canvas: reads the spec from the editor context (single source of truth).
 // ---------------------------------------------------------------------------
 
-function EditorCanvas({ index }: { index: number }) {
-  const { spec } = useEditor()
+function EditorCanvas({ index, replayKey }: { index: number; replayKey: number }) {
+  const { spec, editing, conflict, overwriteConflictSave } = useEditor()
   if (!spec) return null
-  return <PresentationRenderer spec={spec} activeIndex={index} fullscreen />
+  return (
+    <div className="flex flex-col gap-2 w-full h-full">
+      {conflict && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-300">
+          <span className="flex-1">
+            Modified elsewhere after you loaded it. Reload to get the latest version, or overwrite it with your local changes.
+          </span>
+          <button
+            className="px-2.5 py-1 rounded-lg border border-amber-500/40 text-amber-200 hover:bg-amber-500/10 cursor-pointer"
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </button>
+          <button
+            className="px-2.5 py-1 rounded-lg bg-amber-500/80 text-black font-semibold hover:bg-amber-500 cursor-pointer"
+            onClick={() => overwriteConflictSave()}
+          >
+            Overwrite
+          </button>
+        </div>
+      )}
+      {/* Manual (Canva-style) editing toolbar — editors only. */}
+      {editing && <CanvasToolbar slideIndex={index} />}
+      <div className="flex-1 min-h-0" id="editor-slide-capture">
+        <PresentationRenderer key={replayKey} spec={spec} activeIndex={index} fullscreen />
+      </div>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -141,9 +175,9 @@ function AiPanel({ presentationId, currentSlideIndex, onClose }: { presentationI
   )
 }
 
-function HistoryWrapper({ presentationId }: { presentationId: string }) {
+function HistoryWrapper({ presentationId, currentSlideIndex }: { presentationId: string; currentSlideIndex: number }) {
   const { applyAiEdit } = useEditor()
-  return <HistoryPanel presentationId={presentationId} onRestore={applyAiEdit} />
+  return <HistoryPanel presentationId={presentationId} onRestore={applyAiEdit} currentSlideIndex={currentSlideIndex} />
 }
 
 // ---------------------------------------------------------------------------
@@ -151,10 +185,51 @@ function HistoryWrapper({ presentationId }: { presentationId: string }) {
 // a SINGLE EditorProvider.
 // ---------------------------------------------------------------------------
 
+/** Real rendered slide scaled down — no editing chrome, no ambient layer. */
+function SlideThumb({ slide, customAnimations, active }: { slide: SlideSpec; customAnimations: CustomAnimationDef[] | null | undefined; active: boolean }) {
+  const deck = useDeckTheme()
+  const tokens = deck?.tokens
+  return (
+    <div
+      style={{
+        width: '100%',
+        aspectRatio: '16 / 9',
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 8,
+        pointerEvents: 'none',
+        background: tokens?.bg,
+      }}
+    >
+      <div
+        style={{
+          width: 1024,
+          height: 576,
+          transform: 'scale(0.171)',
+          transformOrigin: 'top left',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        }}
+      >
+        <SlideRenderer
+          slide={slide}
+          tokens={tokens}
+          customAnimations={customAnimations}
+          active={active}
+          nonInteractive
+        />
+      </div>
+    </div>
+  )
+}
+
 interface EditorBodyProps {
   presentationId: string
   initialSpec: PresentationSpec
+  initialUpdatedAt: string | null
   index: number
+  setIndex: (i: number) => void
   inspectorTab: InspectorTab
   setInspectorTab: (t: InspectorTab) => void
   onSpecChange: (spec: PresentationSpec) => void
@@ -163,14 +238,22 @@ interface EditorBodyProps {
   onToolbarState: (s: ToolbarState) => void
   aiEditOpen: boolean
   setAiEditOpen: (open: boolean) => void
+  doctorOpen: boolean
+  setDoctorOpen: (open: boolean) => void
 }
 
 function EditorBody({
-  presentationId, initialSpec, index, inspectorTab, setInspectorTab,
+  presentationId, initialSpec, initialUpdatedAt, index, setIndex, inspectorTab, setInspectorTab,
   onSpecChange, onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
+  doctorOpen, setDoctorOpen,
 }: EditorBodyProps) {
   const [inspectorWidth, setInspectorWidth] = useState(readInspectorWidth)
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  // The slide navigator lives inside EditorProvider so "Add slide" can use
+  // the editor context; the spec here is the same live spec the canvas uses.
+  const { spec: navSpec, addSlide } = useEditor()
+  const navSlides = navSpec?.slides ?? []
+  const [replayKey, setReplayKey] = useState(0)
 
   // Persist the chosen width so it survives reloads.
   useEffect(() => {
@@ -215,18 +298,62 @@ function EditorBody({
     <EditorProvider
       presentationId={presentationId}
       initialSpec={initialSpec}
+      initialUpdatedAt={initialUpdatedAt}
       onSpecChange={onSpecChange}
     >
       <EditorBridge ref={bridgeRef} />
       <ToolbarStateSync onChange={onToolbarState} />
 
       <div className="flex flex-1 min-h-0">
+        {/* ----- Left: Slide Navigator (inside the provider for Add slide) ----- */}
+        <aside className="relative z-10 w-48 shrink-0 overflow-y-auto bg-surface/70 backdrop-blur-md border-r border-border p-2 flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 px-1 pt-1 pb-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-dim">Slides</span>
+            <span className="ml-auto text-[10px] tabular-nums text-text-dim">{navSlides.length}</span>
+          </div>
+          {navSlides.map((navSlide, i) => (
+            <div
+              key={i}
+              className={`group relative w-full rounded-xl border p-1 transition-all duration-200 ${
+                i === index
+                  ? 'border-accent/50 ring-1 ring-accent/25 shadow-md shadow-accent/10'
+                  : 'border-border hover:border-accent/40'
+              }`}
+            >
+              <button className="w-full cursor-pointer" onClick={() => setIndex(i)} title={`Slide ${i + 1}`}>
+                <SlideThumb
+                  slide={navSlide}
+                  customAnimations={navSpec?.meta?.customAnimations}
+                  active
+                />
+                <span
+                  className={`mt-1 block text-[10px] font-semibold tabular-nums ${
+                    i === index ? 'text-accent' : 'text-text-dim'
+                  }`}
+                >
+                  {i + 1}
+                </span>
+              </button>
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <SmartAiMenu slideIndex={i} presentationId={presentationId} />
+              </div>
+            </div>
+          ))}
+          <button
+            className="mt-1 h-10 w-full rounded-xl border border-dashed border-border text-xs font-medium text-text-dim hover:border-accent/50 hover:text-accent hover:bg-accent/5 transition-all cursor-pointer flex items-center justify-center gap-1"
+            title="Add a blank slide"
+            onClick={() => setIndex(addSlide('blank'))}
+          >
+            + Add slide
+          </button>
+        </aside>
+
         {/* ----- Center: Canvas ----- */}
         <main className="relative flex-1 overflow-hidden bg-bg/40 flex items-center justify-center">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_500px_at_50%_-10%,rgba(234,88,12,0.08),transparent_60%)]" />
           <div className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent2/10 blur-[100px]" />
           <div className="relative z-10 w-full h-full flex items-center justify-center px-6 py-6">
-            <EditorCanvas index={index} />
+            <EditorCanvas index={index} replayKey={replayKey} />
           </div>
         </main>
 
@@ -249,7 +376,7 @@ function EditorBody({
           style={{ width: inspectorWidth }}
         >
           <div className="flex border-b border-border bg-bg/30">
-            {(['ai', 'history'] as InspectorTab[]).map((tab) => (
+            {(['ai', 'motion', 'history'] as InspectorTab[]).map((tab) => (
               <button
                 key={tab}
                 className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-all cursor-pointer ${
@@ -273,8 +400,12 @@ function EditorBody({
               />
             )}
 
+            {inspectorTab === 'motion' && (
+              <MotionPanel slideIndex={index} onReplay={() => setReplayKey((k) => k + 1)} />
+            )}
+
             {inspectorTab === 'history' && (
-              <HistoryWrapper presentationId={presentationId} />
+              <HistoryWrapper presentationId={presentationId} currentSlideIndex={index} />
             )}
           </div>
         </aside>
@@ -284,6 +415,12 @@ function EditorBody({
         presentationId={presentationId}
         open={aiEditOpen}
         onClose={() => setAiEditOpen(false)}
+      />
+
+      <DeckDoctorModal
+        presentationId={presentationId}
+        open={doctorOpen}
+        onClose={() => setDoctorOpen(false)}
       />
     </EditorProvider>
   )
@@ -301,6 +438,7 @@ export default function EditorPage() {
   // --- state ----------------------------------------------------------------
 
   const [initialSpec, setInitialSpec] = useState<PresentationSpec | null>(null)
+  const [initialUpdatedAt, setInitialUpdatedAt] = useState<string | null>(null)
   const [liveSpec, setLiveSpec] = useState<PresentationSpec | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -308,6 +446,7 @@ export default function EditorPage() {
   const [presenting, setPresenting] = useState(false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('ai')
   const [aiEditOpen, setAiEditOpen] = useState(false)
+  const [doctorOpen, setDoctorOpen] = useState(false)
   const [accessRole, setAccessRole] = useState<string | null>(null)
 
   // toolbar undo/redo/save state, mirrored from the editor context
@@ -345,6 +484,13 @@ export default function EditorPage() {
           setIndex(0)
         }
       })
+    // The locking baseline lives on the presentation row, not the spec.
+    presentationsApi
+      .get(id)
+      .then((row) => {
+        if (!cancelled) setInitialUpdatedAt(row.updated_at)
+      })
+      .catch(() => { /* non-critical: locking just stays disabled */ })
       .catch((err) => {
         if (!cancelled) {
           setError(err instanceof ApiClientError ? err.message : 'Failed to load presentation')
@@ -485,16 +631,29 @@ export default function EditorPage() {
           <span className="mx-1 h-5 w-px bg-border" />
 
           {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Quick AI edit"
-              className="rounded-xl text-accent hover:text-accent hover:bg-accent/10"
-              onClick={() => setAiEditOpen(true)}
-            >
-              <Sparkles size={14} />
-              <span>AI Edit</span>
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Quick AI edit"
+                className="rounded-xl text-accent hover:text-accent hover:bg-accent/10"
+                onClick={() => setAiEditOpen(true)}
+              >
+                <Sparkles size={14} />
+                <span>AI Edit</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Deck Doctor — scan every slide for overflow, overlaps and truncation, then fix with AI"
+                className="rounded-xl text-text-muted hover:text-accent hover:bg-accent/10"
+                onClick={() => setDoctorOpen(true)}
+              >
+                <Stethoscope size={14} />
+                <span className="hidden md:inline">Doctor</span>
+              </Button>
+            </>
           )}
 
           <div className="relative" ref={exportRef}>
@@ -575,51 +734,26 @@ export default function EditorPage() {
             <FullscreenPlayer spec={liveSpec} onExit={() => setPresenting(false)} />
           ) : (
             <>
-              {/* Left: Slide Navigator (outside EditorProvider — only needs liveSpec) */}
-              <div className="flex flex-1 min-h-0">
-                <aside className="relative z-10 w-48 shrink-0 overflow-y-auto bg-surface/70 backdrop-blur-md border-r border-border p-2 flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1.5 px-1 pt-1 pb-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-dim">Slides</span>
-                    <span className="ml-auto text-[10px] tabular-nums text-text-dim">{totalSlides}</span>
-                  </div>
-                  {liveSpec?.slides?.map((_slide, i) => (
-                    <button
-                      key={i}
-                      className={`h-14 w-full rounded-xl border text-xs font-medium transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
-                        i === index
-                          ? 'border-accent/40 bg-gradient-to-br from-accent/15 to-accent2/10 text-accent ring-1 ring-accent/25 shadow-md shadow-accent/10'
-                          : 'border-border bg-surface2/60 text-text-dim hover:border-accent/40 hover:text-text'
-                      }`}
-                      onClick={() => setIndex(i)}
-                    >
-                      <span>Slide {i + 1}</span>
-                      <span className="h-1 w-6 rounded-full overflow-hidden bg-bg/60">
-                        <span
-                          className="block h-full rounded-full bg-gradient-to-r from-accent to-accent2 transition-all duration-300"
-                          style={{ width: i === index ? '100%' : '0%' }}
-                        />
-                      </span>
-                    </button>
-                  ))}
-                </aside>
-
-                {/* Single EditorProvider owns the spec for canvas + AI + history.
-                 * liveSpec is mirrored from the editor via onSpecChange so the
-                 * slide navigator and present mode stay in sync too. */}
-                <EditorBody
-                  presentationId={id!}
-                  initialSpec={initialSpec}
-                  index={index}
-                  inspectorTab={inspectorTab}
-                  setInspectorTab={setInspectorTab}
-                  onSpecChange={setLiveSpec}
-                  onCloseAi={() => setInspectorTab('history')}
-                  bridgeRef={editorBridgeRef}
-                  onToolbarState={setToolbarState}
-                  aiEditOpen={aiEditOpen}
-                  setAiEditOpen={setAiEditOpen}
-                />
-              </div>
+              {/* Single EditorProvider owns the spec for navigator + canvas +
+                 AI + history. liveSpec is mirrored from the editor via
+                 onSpecChange so the present mode stays in sync too. */}
+              <EditorBody
+                presentationId={id!}
+                initialSpec={initialSpec}
+                initialUpdatedAt={initialUpdatedAt}
+                index={index}
+                setIndex={setIndex}
+                inspectorTab={inspectorTab}
+                setInspectorTab={setInspectorTab}
+                onSpecChange={setLiveSpec}
+                onCloseAi={() => setInspectorTab('history')}
+                bridgeRef={editorBridgeRef}
+                onToolbarState={setToolbarState}
+                aiEditOpen={aiEditOpen}
+                setAiEditOpen={setAiEditOpen}
+                doctorOpen={doctorOpen}
+                setDoctorOpen={setDoctorOpen}
+              />
             </>
           )}
         </DeckThemeProvider>

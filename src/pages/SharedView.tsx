@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
-import { publicSharesApi, ApiClientError } from '../lib/api'
+import { publicSharesApi, ApiClientError, type ShareComment } from '../lib/api'
 import type { PresentationSpec } from '../types'
 import PresentationRenderer from '../components/renderer/PresentationRenderer'
 import { DeckThemeProvider } from '../components/renderer/DeckThemeContext'
 import type { ThemeName } from '../components/renderer/theme'
-import { Lock } from 'lucide-react'
+import { Lock, MessageSquare } from 'lucide-react'
 
 interface Props {
   token: string
@@ -22,6 +22,11 @@ export default function SharedView({ token, password: initialPassword }: Props) 
   const [passwordInput, setPasswordInput] = useState('')
   const [activePassword, setActivePassword] = useState<string | undefined>(initialPassword)
   const [index, setIndex] = useState(0)
+  const [comments, setComments] = useState<ShareComment[]>([])
+  const [commentAuthor, setCommentAuthor] = useState('')
+  const [commentText, setCommentText] = useState('')
+  const [commentSent, setCommentSent] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -32,6 +37,7 @@ export default function SharedView({ token, password: initialPassword }: Props) 
       .then(data => {
         setSpec(data.spec)
         setTitle(data.title)
+        setComments(data.comments ?? [])
         setNeedsPassword(false)
       })
       .catch(err => {
@@ -64,6 +70,21 @@ export default function SharedView({ token, password: initialPassword }: Props) 
     if (!passwordInput.trim()) return
     setActivePassword(passwordInput)
     setLoading(true)
+  }
+
+  const submitComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const content = commentText.trim()
+    if (!content) return
+    try {
+      const posted = await publicSharesApi.postComment(token, content, commentAuthor.trim() || undefined)
+      setComments(c => [...c, posted])
+      setCommentText('')
+      setCommentSent(true)
+      setTimeout(() => setCommentSent(false), 2500)
+    } catch {
+      setError('Could not send your comment')
+    }
   }
 
   if (loading) {
@@ -186,7 +207,16 @@ export default function SharedView({ token, password: initialPassword }: Props) 
           >
             Prev
           </button>
-          <span style={{ fontSize: '13px', color: colors.textMuted }}>{index + 1} / {total}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span style={{ fontSize: '13px', color: colors.textMuted }}>{index + 1} / {total}</span>
+            <button
+              onClick={() => setShowFeedback(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${colors.border}`, background: 'transparent', color: colors.text, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              <MessageSquare size={14} />
+              Feedback{comments.length > 0 ? ` (${comments.length})` : ''}
+            </button>
+          </div>
           <button
             onClick={() => setIndex(i => Math.min(i + 1, total - 1))}
             disabled={index >= total - 1}
@@ -195,6 +225,48 @@ export default function SharedView({ token, password: initialPassword }: Props) 
             Next
           </button>
         </div>
+
+        {showFeedback && (
+          <div style={{ borderTop: `1px solid ${colors.border}`, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflow: 'auto' }}>
+            {comments.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {comments.map((c, ci) => (
+                  <div key={c.id ?? ci} style={{ fontSize: 13 }}>
+                    <strong style={{ color: colors.text }}>{c.author_name || 'Anonymous'}:</strong>{' '}
+                    <span style={{ color: colors.textMuted }}>{c.content}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {commentSent ? (
+              <span style={{ fontSize: 13, color: '#22c55e' }}>Comment sent — thank you!</span>
+            ) : (
+              <form onSubmit={submitComment} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  value={commentAuthor}
+                  onChange={e => setCommentAuthor(e.target.value)}
+                  placeholder="Your name (optional)"
+                  style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none' }}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    placeholder="Leave a comment for the author…"
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.surface2, color: colors.text, fontSize: 13, outline: 'none' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!commentText.trim()}
+                    style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: colors.accent, color: '#fff', fontSize: 13, fontWeight: 700, cursor: commentText.trim() ? 'pointer' : 'default', opacity: commentText.trim() ? 1 : 0.5 }}
+                  >
+                    Send
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
       </div>
     </DeckThemeProvider>
   )

@@ -24,6 +24,10 @@ interface EditorContextValue {
   isDirty: boolean
   isSaving: boolean
   saveError: string | null
+  /** True when the last save hit a 409 (deck changed elsewhere). */
+  conflict: boolean
+  /** Overwrite the remote version with the local spec (last-write-wins). */
+  overwriteConflictSave: () => Promise<void>
   canUndo: boolean
   canRedo: boolean
   version: number
@@ -41,6 +45,8 @@ interface EditorContextValue {
   duplicateElement: (slideIndex: number, elementIndex: number) => void
   deleteSlide: (slideIndex: number) => void
   duplicateSlide: (slideIndex: number) => void
+  /** Append a new (blank by default) slide; returns its index. */
+  addSlide: (layout?: SlideSpec['layout']) => number
   updateElementText: (slideIndex: number, elementIndex: number, text: string) => void
 
   // History
@@ -99,6 +105,9 @@ interface Props {
   presentationId: string
   // When provided, the editor seeds from this spec instead of fetching.
   initialSpec?: PresentationSpec | null
+  // The presentation's updated_at when initialSpec was loaded — used as the
+  // optimistic-locking baseline for saves.
+  initialUpdatedAt?: string | null
   // Fired whenever the editor's spec changes (mutations, undo/redo, AI edits).
   // The page uses this to keep its visible spec in sync.
   onSpecChange?: (spec: PresentationSpec) => void
@@ -106,11 +115,12 @@ interface Props {
   editing?: boolean
 }
 
-export function EditorProvider({ children, presentationId, initialSpec, onSpecChange, editing = true }: Props) {
+export function EditorProvider({ children, presentationId, initialSpec, initialUpdatedAt, onSpecChange, editing = true }: Props) {
   const [spec, setSpec] = useState<PresentationSpec | null>(initialSpec ?? null)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [conflict, setConflict] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [future, setFuture] = useState<HistoryEntry[]>([])
   const [selection, setSelectionState] = useState<Selection | null>(null)
@@ -118,6 +128,9 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
   const [version, setVersion] = useState(0)
 
   const savedHashRef = useRef<string>('')
+  // Optimistic-locking baseline: the backend 409s when the deck changed
+  // elsewhere since this timestamp; refreshed from X-Updated-At on each save.
+  const updatedAtRef = useRef<string | null>(initialUpdatedAt ?? null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pidRef = useRef(presentationId)
   const onSpecChangeRef = useRef(onSpecChange)
@@ -132,7 +145,18 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
     if (initialSpec && !seededRef.current) {
       seededRef.current = true
       setSpec(initialSpec)
-      setHistory([])
+      // Restore the undo stack captured before the reload, if any.
+      let restored: HistoryEntry[] = []
+      try {
+        const raw = sessionStorage.getItem(`slideai.undo.${presentationId}`)
+        if (raw) {
+          const parsed = JSON.parse(raw) as { spec: PresentationSpec; note: string }[]
+          if (Array.isArray(parsed)) {
+            restored = parsed.filter(e => e && e.spec).map(e => ({ spec: e.spec, note: e.note }))
+          }
+        }
+      } catch { /* ignore */ }
+      setHistory(restored)
       setFuture([])
       setIsDirty(false)
       savedHashRef.current = specHash(initialSpec)
@@ -154,7 +178,16 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
   const bump = useCallback(() => setVersion(v => v + 1), [])
 
   const pushHistory = useCallback((newSpec: PresentationSpec, note: string) => {
-    setHistory(h => [...h, { spec: newSpec, note }])
+    setHistory(h => {
+      const next = [...h, { spec: newSpec, note }]
+      // Keep a small undo stack across page reloads (session-only storage).
+      try {
+        const key = `slideai.undo.${pidRef.current}`
+        const capped = next.slice(-5)
+        sessionStorage.setItem(key, JSON.stringify(capped.map(e => ({ spec: e.spec, note: e.note }))))
+      } catch { /* quota — undo simply won't survive reload */ }
+      return next
+    })
     setFuture([])
     setIsDirty(true)
     bump()
@@ -169,11 +202,20 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
     setIsSaving(true)
     setSaveError(null)
     try {
-      await specApi.update(pidRef.current, spec)
+      const res = await specApi.update(pidRef.current, spec, updatedAtRef.current)
+      updatedAtRef.current = res.updatedAt
       savedHashRef.current = h
       setIsDirty(false)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed')
+      if (err instanceof Error && 'status' in err && (err as { status?: number }).status === 409) {
+        setConflict(true)
+        setSaveError(
+          'This presentation was modified in another tab or by an agent. ' +
+          'Your changes are kept locally — reload or overwrite.',
+        )
+      } else {
+        setSaveError(err instanceof Error ? err.message : 'Save failed')
+      }
     } finally {
       setIsSaving(false)
     }
@@ -241,7 +283,7 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
   }, [spec, pushHistory, scheduleSave, bump])
 
   const duplicateSlide = useCallback((slideIndex: number) => {
-    if (!spec) return
+    if (!spec) return -1
     pushHistory(spec, `duplicate slide ${slideIndex}`)
     const slide = spec.slides[slideIndex]
     const slides = [...spec.slides]
@@ -249,6 +291,18 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
     setSpec({ ...spec, slides })
     bump()
     scheduleSave()
+    return slideIndex + 1
+  }, [spec, pushHistory, scheduleSave, bump])
+
+  const addSlide = useCallback((layout: SlideSpec['layout'] = 'blank'): number => {
+    if (!spec) return -1
+    pushHistory(spec, `add slide`)
+    const newSlide: SlideSpec = { layout, elements: [] }
+    const slides = [...spec.slides, newSlide]
+    setSpec({ ...spec, slides })
+    bump()
+    scheduleSave()
+    return slides.length - 1
   }, [spec, pushHistory, scheduleSave, bump])
 
   const updateElementText = useCallback((slideIndex: number, elementIndex: number, text: string) => {
@@ -329,7 +383,18 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
     bump()
   }, [bump])
 
+  // Refresh the locking baseline when the page learns a new updated_at.
+  useEffect(() => {
+    if (initialUpdatedAt) updatedAtRef.current = initialUpdatedAt
+  }, [initialUpdatedAt])
+
   const forceSave = useCallback(() => doSave(), [doSave])
+
+  const overwriteConflictSave = useCallback(async () => {
+    updatedAtRef.current = null
+    setConflict(false)
+    await doSave()
+  }, [doSave])
 
   const applyAiEdit = useCallback((newSpec: PresentationSpec) => {
     if (!spec) return
@@ -349,9 +414,9 @@ export function EditorProvider({ children, presentationId, initialSpec, onSpecCh
     selection, copiedElement,
     editing,
     updateElement, updateSlide, addElement, deleteElement, duplicateElement,
-    deleteSlide, duplicateSlide, updateElementText,
+    deleteSlide, duplicateSlide, addSlide, updateElementText,
     undo, redo, copy, paste, setSelection, applyAiEdit,
-    load, forceSave,
+    load, forceSave, conflict, overwriteConflictSave,
   }
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>
@@ -370,6 +435,7 @@ export function useEditorShortcuts() {
       if ((e.target as HTMLElement).isContentEditable) return
 
       const mod = e.ctrlKey || e.metaKey
+      const updateElement = ctx.updateElement
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
         if (canUndo) undo()
@@ -389,6 +455,20 @@ export function useEditorShortcuts() {
         if (selection && selection.elementIndex !== null) {
           e.preventDefault()
           deleteElement(selection.slideIndex, selection.elementIndex)
+        }
+      } else if (e.key.startsWith('Arrow') && selection && selection.elementIndex !== null) {
+        // Canvas-style nudging: arrows move the selected free element by
+        // 0.5%, Shift+arrows by 3%.
+        const slide = ctx.spec?.slides[selection.slideIndex]
+        const el = slide?.elements[selection.elementIndex]
+        if (el && el.x != null && el.y != null) {
+          e.preventDefault()
+          const step = e.shiftKey ? 3 : 0.5
+          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+          const nx = Math.min(96, Math.max(0, Math.round(((el.x ?? 0) + dx) * 10) / 10))
+          const ny = Math.min(96, Math.max(0, Math.round(((el.y ?? 0) + dy) * 10) / 10))
+          updateElement(selection.slideIndex, selection.elementIndex, { x: nx, y: ny })
         }
       }
     }

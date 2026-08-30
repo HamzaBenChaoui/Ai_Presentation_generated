@@ -7,6 +7,8 @@ import type { PresentationSpec } from '../../types'
 interface Props {
   presentationId: string
   onRestore: (spec: PresentationSpec) => void
+  /** Current slide index — enables per-slide restore. */
+  currentSlideIndex?: number
 }
 
 function timeAgo(dateStr: string): string {
@@ -21,7 +23,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(days / 30)}mo ago`
 }
 
-export default function HistoryPanel({ presentationId, onRestore }: Props) {
+export default function HistoryPanel({ presentationId, onRestore, currentSlideIndex }: Props) {
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [restoring, setRestoring] = useState<string | null>(null)
@@ -41,6 +43,24 @@ export default function HistoryPanel({ presentationId, onRestore }: Props) {
   useEffect(() => {
     loadVersions()
   }, [loadVersions])
+
+  /** Restore ONLY the current slide from a version into the live spec. */
+  const handleRestoreSlide = async (versionId: string) => {
+    if (currentSlideIndex === undefined) return
+    setRestoring(versionId)
+    try {
+      const version = await versionsApi.get(presentationId, versionId)
+      const versionSpec = (version as unknown as { spec: PresentationSpec }).spec
+      const versionSlide = versionSpec?.slides?.[currentSlideIndex]
+      if (!versionSlide) return
+      const current = await import('../../lib/api').then(m => m.specApi.get(presentationId))
+      const slides = [...current.slides]
+      slides[currentSlideIndex] = versionSlide
+      onRestore({ ...current, slides })
+    } finally {
+      setRestoring(null)
+    }
+  }
 
   const handleRestore = async (versionId: string) => {
     setRestoring(versionId)
@@ -93,6 +113,20 @@ export default function HistoryPanel({ presentationId, onRestore }: Props) {
                   </span>
                 </div>
               </div>
+              {currentSlideIndex !== undefined && (
+                <button
+                  onClick={() => handleRestoreSlide(v.id)}
+                  disabled={restoring === v.id}
+                  className={cn(
+                    'opacity-0 group-hover:opacity-100 px-1.5 py-1.5 rounded-lg border border-border text-[10px]',
+                    'text-text-dim hover:text-accent hover:border-accent transition-all cursor-pointer',
+                    'disabled:opacity-40 disabled:cursor-default',
+                  )}
+                  title={`Restore only slide ${currentSlideIndex + 1} from this version`}
+                >
+                  → slide
+                </button>
+              )}
               <button
                 onClick={() => handleRestore(v.id)}
                 disabled={restoring === v.id}

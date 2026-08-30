@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, Trash2, User as UserIcon, SlidersHorizontal, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
+import { LogOut, Trash2, User as UserIcon, SlidersHorizontal, AlertTriangle, Settings as SettingsIcon, Cpu } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
@@ -9,7 +9,10 @@ import { useToast } from '../components/ui/Toast'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { useAuth } from '../context/AuthContext'
 import { getSettings, updateSettings, clearSettings, DEFAULT_SETTINGS, type AppSettings } from '../lib/settings'
+import { useBrandKit } from '../context/BrandKitContext'
+import { filesApi, ApiClientError } from '../lib/api'
 import { clearTokens } from '../lib/api'
+import ModelSelect from '../components/ai/ModelSelect'
 
 const easeOut = [0.22, 1, 0.36, 1] as const
 
@@ -67,6 +70,47 @@ export default function SettingsPage() {
   const { toast } = useToast()
 
   const [settings, setSettings] = useState<AppSettings>(getSettings)
+  const { brand, save: saveBrand } = useBrandKit()
+  const [brandDraft, setBrandDraft] = useState(() => ({
+    color_primary: '',
+    color_secondary: '',
+    font_heading: '',
+    font_body: '',
+  }))
+  const [brandSaving, setBrandSaving] = useState(false)
+
+  const brandValue = (key: keyof typeof brandDraft): string =>
+    (brandDraft[key] as string) || ((brand?.[key] as string | null | undefined) ?? '')
+
+  const saveBrandKit = async () => {
+    setBrandSaving(true)
+    try {
+      const patch: Record<string, string> = {}
+      for (const key of ['color_primary', 'color_secondary', 'font_heading', 'font_body'] as const) {
+        const v = brandDraft[key].trim()
+        if (v) patch[key] = v
+      }
+      await saveBrand(patch)
+      setBrandDraft({ color_primary: '', color_secondary: '', font_heading: '', font_body: '' })
+      toast.success('Brand kit saved — applied to every deck render.')
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Could not save brand kit')
+    } finally {
+      setBrandSaving(false)
+    }
+  }
+
+  const uploadLogo = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const asset = await filesApi.upload(file)
+      const { url } = await filesApi.url(asset.id)
+      await saveBrand({ logo_url: url })
+      toast.success('Logo saved.')
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Logo upload failed')
+    }
+  }
   const [displayName, setDisplayName] = useState<string>(
     user?.display_name ?? '',
   )
@@ -215,6 +259,31 @@ export default function SettingsPage() {
       </SpotlightCard>
       </motion.div>
 
+      {/* ── Slide AI model ──────────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1, ease: easeOut }}
+        className="relative"
+      >
+      <SpotlightCard className="p-5 sm:p-6">
+        <SectionTitle
+          icon={Cpu}
+          title="Slide AI model"
+          description="Which model generates and edits your presentations"
+        />
+        <div className="max-w-lg">
+          <ModelSelect
+            value={settings.aiModel}
+            onChange={(model) => persist({ aiModel: model })}
+          />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Badge variant="default">Applies to generation, Quick AI edit and the editor AI chat</Badge>
+        </div>
+      </SpotlightCard>
+      </motion.div>
+
       {/* ── Editor preferences ──────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -302,6 +371,100 @@ export default function SettingsPage() {
           >
             reset editor preferences
           </button>
+        </div>
+      </SpotlightCard>
+      </motion.div>
+
+      {/* ── Brand kit ───────────────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.18, ease: easeOut }}
+        className="relative"
+      >
+      <SpotlightCard className="p-5 sm:p-6">
+        <SectionTitle
+          icon={Cpu}
+          title="Brand kit"
+          description="Your logo and colors applied to every deck render"
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+          <div>
+            <label className="text-sm font-medium text-text">Primary color</label>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="color"
+                value={/^#[0-9a-f]{6}$/i.test(brandValue('color_primary')) ? brandValue('color_primary') : '#ea580c'}
+                onChange={(e) => setBrandDraft((d) => ({ ...d, color_primary: e.target.value }))}
+                className="h-10 w-14 rounded-lg border border-border bg-bg cursor-pointer"
+              />
+              <Input
+                value={brandValue('color_primary')}
+                onChange={(e) => setBrandDraft((d) => ({ ...d, color_primary: e.target.value }))}
+                placeholder="#ea580c"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-text">Secondary color</label>
+            <div className="mt-1.5 flex items-center gap-2">
+              <input
+                type="color"
+                value={/^#[0-9a-f]{6}$/i.test(brandValue('color_secondary')) ? brandValue('color_secondary') : '#f59e0b'}
+                onChange={(e) => setBrandDraft((d) => ({ ...d, color_secondary: e.target.value }))}
+                className="h-10 w-14 rounded-lg border border-border bg-bg cursor-pointer"
+              />
+              <Input
+                value={brandValue('color_secondary')}
+                onChange={(e) => setBrandDraft((d) => ({ ...d, color_secondary: e.target.value }))}
+                placeholder="#f59e0b"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-text">Heading font</label>
+            <Input
+              value={brandValue('font_heading')}
+              onChange={(e) => setBrandDraft((d) => ({ ...d, font_heading: e.target.value }))}
+              placeholder="e.g. 'Syne', sans-serif"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-text">Body font</label>
+            <Input
+              value={brandValue('font_body')}
+              onChange={(e) => setBrandDraft((d) => ({ ...d, font_body: e.target.value }))}
+              placeholder="e.g. 'DM Sans', sans-serif"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-text">Logo</label>
+            <div className="mt-1.5 flex items-center gap-2">
+              {brand?.logo_url && (
+                <img src={brand.logo_url} alt="Logo" className="h-10 w-10 rounded-lg object-contain border border-border bg-bg" />
+              )}
+              <label className="flex-1 h-10 grid place-items-center rounded-xl border border-dashed border-border text-xs text-text-dim hover:border-accent/40 hover:text-accent transition-colors cursor-pointer">
+                Upload logo (PNG/SVG)
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    uploadLogo(e.target.files?.[0])
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          <div className="flex items-end">
+            <Button variant="primary" loading={brandSaving} onClick={saveBrandKit}>
+              Save brand kit
+            </Button>
+          </div>
+        </div>
+        <div className="mt-4">
+          <Badge variant="default">Brand colors and fonts override every theme, for you only</Badge>
         </div>
       </SpotlightCard>
       </motion.div>

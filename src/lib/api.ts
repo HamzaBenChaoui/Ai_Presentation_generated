@@ -125,6 +125,13 @@ export const authApi = {
   updateDisplayName(fullName: string) {
     return request<User>("PATCH", "/auth/me", { full_name: fullName });
   },
+  /** Mint a personal 72h access token for MCP clients. */
+  mcpToken() {
+    return request<{ access_token: string; token_type: string; expires_in: number; purpose: string }>(
+      "POST",
+      "/auth/mcp-token",
+    );
+  },
 };
 
 export { request };
@@ -132,6 +139,10 @@ export { request };
 export const presentationsApi = {
   list() {
     return request<PresentationList>("GET", "/presentations");
+  },
+  /** Full-deck search: title, description AND slide content. */
+  search(q: string) {
+    return request<PresentationList>("GET", `/presentations/search?q=${encodeURIComponent(q)}`);
   },
   get(id: string) {
     return request<Presentation>("GET", `/presentations/${id}`);
@@ -161,6 +172,8 @@ export interface GenerateRequest {
   language: string;
   theme: string | null;
   template_name?: string | null;
+  // Model selected on the settings page. Undefined/null → backend default.
+  model?: string | null;
 }
 
 export const generationApi = {
@@ -169,12 +182,87 @@ export const generationApi = {
   },
 };
 
+// --- Model catalog ---------------------------------------------------------
+
+export interface ModelInfo {
+  id: string;
+  owned_by?: string;
+}
+
+export interface ModelsResponse {
+  provider: string;
+  default: string;
+  models: ModelInfo[];
+}
+
+export const modelsApi = {
+  list() {
+    return request<ModelsResponse>("GET", "/models");
+  },
+};
+
+export interface BrandKit {
+  logo_url?: string | null
+  color_primary?: string | null
+  color_secondary?: string | null
+  font_heading?: string | null
+  font_body?: string | null
+  updated_at?: string | null
+}
+
+export const brandKitApi = {
+  get() {
+    return request<BrandKit>("GET", "/brand-kit");
+  },
+  upsert(patch: Partial<BrandKit>) {
+    return request<BrandKit>("PUT", "/brand-kit", patch);
+  },
+};
+
+export interface ImportRequest {
+  source: "markdown" | "url";
+  content?: string | null;
+  url?: string | null;
+  slide_count?: number | null;
+  language?: string;
+  theme?: string | null;
+  model?: string | null;
+}
+
+export const importApi = {
+  run(req: ImportRequest) {
+    return request<Presentation>("POST", "/presentations/import", req);
+  },
+};
+
 export const specApi = {
   get(id: string) {
     return request<PresentationSpec>("GET", `/presentations/${id}/spec`);
   },
-  update(id: string, spec: PresentationSpec) {
-    return request<PresentationSpec>("PUT", `/presentations/${id}/spec`, spec);
+  /**
+   * Persist the spec with optimistic locking. Pass the updated_at the spec
+   * was loaded with — the backend answers 409 if the deck changed since.
+   * The fresh updated_at comes back in the X-Updated-At header.
+   */
+  async update(id: string, spec: PresentationSpec, expectedUpdatedAt?: string | null): Promise<{ spec: PresentationSpec; updatedAt: string | null }> {
+    const authToken = getAccessToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+    const qs = expectedUpdatedAt
+      ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}`
+      : "";
+    const res = await fetch(`${API_BASE}/presentations/${id}/spec${qs}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(spec),
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const err = (data ?? {}) as ApiError;
+      throw new ApiClientError(res.status, err.error ?? "unknown_error", err.message ?? res.statusText, err.detail);
+    }
+    return { spec: data as PresentationSpec, updatedAt: res.headers.get("X-Updated-At") };
   },
 };
 
@@ -187,6 +275,8 @@ export interface SpecEditResponse {
 export interface SpecEditRequest {
   instruction: string;
   target_indexes?: number[];
+  // Model selected on the settings page. Undefined/null → backend default.
+  model?: string | null;
 }
 
 export const aiEditApi = {
@@ -335,6 +425,13 @@ export const versionsApi = {
   },
 };
 
+export interface ShareComment {
+  id?: string;
+  author_name?: string | null;
+  content: string;
+  created_at?: string;
+}
+
 export interface ShareInfo {
   id: string;
   token: string;
@@ -343,6 +440,8 @@ export interface ShareInfo {
   embed_allowed: boolean;
   expires_at: string | null;
   created_at: string;
+  view_count?: number;
+  comments?: ShareComment[];
 }
 
 export interface CreateShareRequest {
@@ -368,12 +467,20 @@ export const sharesApi = {
 export interface SharedPresentation {
   spec: PresentationSpec;
   title: string;
+  comments?: ShareComment[];
 }
 
 export const publicSharesApi = {
   get(token: string, password?: string) {
     const qs = password ? `?password=${encodeURIComponent(password)}` : "";
     return request<SharedPresentation>("GET", `/shared/${token}${qs}`);
+  },
+  /** Leave a reviewer comment on a shared deck (no auth required). */
+  postComment(token: string, content: string, authorName?: string) {
+    return request<ShareComment>("POST", `/shared/${token}/comments`, {
+      content,
+      author_name: authorName || null,
+    });
   },
 };
 
@@ -495,6 +602,10 @@ export const chatApi = {
     presentationId: string,
     message: string,
     currentSlideIndex: number = 0,
+    model?: string | null,
+    screenshot?: string | null,
+    diagnostics?: { element_index: number; problem: string; detail?: string }[] | null,
+    signal?: AbortSignal | null,
   ): AsyncGenerator<{ event: string; data: string }> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const authToken = getAccessToken();
@@ -503,7 +614,14 @@ export const chatApi = {
     const res = await fetch(`${API_BASE}/presentations/${presentationId}/chat/stream`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ message, current_slide_index: currentSlideIndex }),
+      signal: signal ?? undefined,
+      body: JSON.stringify({
+        message,
+        current_slide_index: currentSlideIndex,
+        model: model || null,
+        screenshot: screenshot || null,
+        diagnostics: diagnostics && diagnostics.length > 0 ? diagnostics : null,
+      }),
     });
 
     if (!res.ok || !res.body) {

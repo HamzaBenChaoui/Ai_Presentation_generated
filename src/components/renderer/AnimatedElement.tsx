@@ -64,6 +64,8 @@ export default function AnimatedElement({ el, index, tokens = defaultTokens, act
   const custom: ValidatedCustomAnimation | undefined =
     el.animation && !(el.animation in animations) ? customMap[el.animation] : undefined
   const name: AnimationName = animationFor(el, index)
+  // Manual per-element delay (ms) on top of the automatic stagger.
+  const manualDelayMs = Math.max(0, Number(el.animationDelay) || 0)
   const controls = useAnimationControls()
   const editor = useOptionalEditor()
   const isEditing =
@@ -114,6 +116,7 @@ export default function AnimatedElement({ el, index, tokens = defaultTokens, act
   const delay =
     (isPresentation ? PRESENT_ENTER_OFFSET : 0) +
     depthDelay +
+    manualDelayMs / 1000 +
     Math.min(index * STAGGER_STEP, MAX_STAGGER)
   const exitDelay = Math.min(index * EXIT_STAGGER_STEP, MAX_EXIT_STAGGER)
 
@@ -188,6 +191,8 @@ function CustomAnimatedElement({
   const delay =
     (isPresentation ? PRESENT_ENTER_OFFSET : 0) +
     depthDelay +
+    Math.max(0, Number(el.animationDelay) || 0) / 1000 +
+    animation.delayMs / 1000 +
     Math.min(index * STAGGER_STEP, MAX_STAGGER)
   const exitDelay = Math.min(index * EXIT_STAGGER_STEP, MAX_EXIT_STAGGER)
 
@@ -203,7 +208,7 @@ function CustomAnimatedElement({
   try {
     style = active
       ? {
-          animation: `${animation.name} ${animation.durationMs}ms ${animation.easing} ${delay}s both`,
+          animation: `${animation.name} ${animation.durationMs}ms ${animation.easing} ${delay}s ${animation.iterations} both`,
           animationPlayState: 'running',
           willChange: 'transform, opacity, filter',
         }

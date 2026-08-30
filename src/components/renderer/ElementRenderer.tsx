@@ -4,8 +4,10 @@ import type { CSSProperties } from 'react'
 import type { SpecElement, RenderTokens } from './theme'
 import { defaultTokens } from './theme'
 import { useOptionalEditor } from '../editor/EditorContext'
+import { SlideActiveContext } from './slideContext'
 import EditableText from '../editor/EditableText'
 import ImagePickerModal from '../editor/ImagePickerModal'
+import { useResolvedImageSrc } from '../../lib/imageUrls'
 import { Image as ImageIcon } from 'lucide-react'
 
 /** Simple context to pass the current slide index down to ElementRenderer. */
@@ -25,6 +27,9 @@ interface Props {
 
 export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 }: Props) {
   const editorCtx = useOptionalEditor()
+  const activeSlideActive = useContext(SlideActiveContext)
+  // Fresh signed URL when the image references a file_id (URLs expire).
+  const resolvedSrc = useResolvedImageSrc(el)
   const slideIndex = useActiveSlideIndex()
   const isEditing = editorCtx?.editing === true && (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph')
   const [imagePickerOpen, setImagePickerOpen] = useState(false)
@@ -41,19 +46,10 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
 
   const handleTextChange = (newText: string) => {
     if (editorCtx) {
-      // Find the active slide index from the spec — for fullscreen single-slide mode,
-      // the active slide is the one being displayed
-      // We need the current slide index; EditorContext doesn't track it directly,
-      // but the PresentationRenderer in fullscreen mode renders slide at activeIndex.
-      // We use 0 as default since fullscreen only shows one slide.
-      // The real fix: use the active slide index from the parent.
-      // For now, use the spec's current slides index.
-      // This works because in fullscreen mode we only render the active slide,
-      // and the ElementRenderer gets the elements from that slide.
-      // We need to find which slide this element belongs to.
-      // Simple approach: just use updateElement which already exists.
+      // Commit to the element's REAL index in slide.elements (not the
+      // per-type group index) so edits land on the exact element rendered.
       if (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph') {
-        editorCtx.updateElement(slideIndex, index, { text: newText })
+        editorCtx.updateElement(slideIndex, realIndex, { text: newText })
       }
     }
   }
@@ -63,8 +59,20 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     color: tokens.text,
     margin: 0,
   }
-  const anim = el.animation ? `data-anim="${el.animation}"` : ''
+  const animProps = el.animation ? { 'data-anim': el.animation } : {}
   const key = `${el.type}-${index}`
+
+  // Per-element style overrides (ElementStyle): applied last so they win
+  // over the theme defaults. fontSize/fontWeight replace the clamp() values.
+  const userStyle = el.style ?? {}
+  const styleOverrides: CSSProperties = {
+    ...(userStyle.color ? { color: userStyle.color } : {}),
+    ...(userStyle.fontSize ? { fontSize: userStyle.fontSize } : {}),
+    ...(userStyle.fontWeight ? { fontWeight: userStyle.fontWeight } : {}),
+    ...(userStyle.align ? { textAlign: userStyle.align } : {}),
+    ...(userStyle.opacity != null ? { opacity: userStyle.opacity } : {}),
+    ...(userStyle.rotation ? { transform: `rotate(${userStyle.rotation}deg)` } : {}),
+  }
 
   switch (el.type) {
     case 'title': {
@@ -86,15 +94,15 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
             value={el.text ?? ''}
             onChange={handleTextChange}
             as={tag}
-            style={titleStyle}
+            style={{ ...titleStyle, ...styleOverrides }}
           />
         )
       }
       return (
         <h1
           key={key}
-          {...{ [anim]: '' } as any}
-          style={titleStyle}
+          {...animProps}
+          style={{ ...titleStyle, ...styleOverrides }}
         >
           {el.text}
         </h1>
@@ -108,11 +116,11 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
             value={el.text ?? ''}
             onChange={handleTextChange}
             as="p"
-            style={{ ...style, ...subStyle, width: '100%' }}
+            style={{ ...style, ...subStyle, ...styleOverrides, width: '100%' }}
           />
         )
       }
-      return <p key={key} {...{ [anim]: '' } as any} style={{ ...style, ...subStyle }}>{el.text}</p>
+      return <p key={key} {...animProps} style={{ ...style, ...subStyle, ...styleOverrides }}>{el.text}</p>
     }
     case 'paragraph': {
       const paraStyle: CSSProperties = { fontSize: 'clamp(15px, 1.6vw, 20px)', lineHeight: 1.6, color: tokens.textMuted, maxWidth: '60ch' }
@@ -122,15 +130,15 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
             value={el.text ?? ''}
             onChange={handleTextChange}
             as="p"
-            style={{ ...style, ...paraStyle, width: '100%' }}
+            style={{ ...style, ...paraStyle, ...styleOverrides, width: '100%' }}
           />
         )
       }
-      return <p key={key} {...{ [anim]: '' } as any} style={{ ...style, ...paraStyle }}>{el.text}</p>
+      return <p key={key} {...animProps} style={{ ...style, ...paraStyle, ...styleOverrides }}>{el.text}</p>
     }
     case 'bullets':
       return (
-        <ul key={key} {...{ [anim]: '' } as any} style={{ ...style, listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <ul key={key} {...animProps} style={{ ...style, listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {(el.items || []).map((b: any, i: number) => (
             <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', fontSize: 'clamp(15px, 1.6vw, 20px)', color: tokens.text }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: tokens.accent, marginTop: '10px', flexShrink: 0, boxShadow: `0 0 12px ${tokens.accent}` }} />
@@ -144,7 +152,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
       return (
         <div
           key={key}
-          {...{ [anim]: '' } as any}
+          {...animProps}
           onClick={() => {
             if (editorCtx?.editing) editorCtx.setSelection({ slideIndex, elementIndex: realIndex })
           }}
@@ -163,8 +171,19 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
             cursor: editorCtx?.editing ? 'pointer' : 'default',
           }}
         >
-          {el.src ? (
-            <img src={el.src} alt={el.alt || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          {resolvedSrc ? (
+            <img
+              src={resolvedSrc}
+              alt={el.alt || ''}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                ...(el.flip ? { transform: 'scaleX(-1)' } : {}),
+                ...(el.objectPosition ? { objectPosition: el.objectPosition } : {}),
+              }}
+            />
           ) : (
             <span>{el.alt || 'Image'}</span>
           )}
@@ -192,7 +211,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
               }}
             >
               <ImageIcon size={14} />
-              {el.src ? 'Replace' : 'Insert image'}
+              {resolvedSrc ? 'Replace' : 'Insert image'}
             </button>
           )}
           {el.caption && <span style={{ position: 'absolute', bottom: 8, fontSize: 12 }}>{el.caption}</span>}
@@ -213,14 +232,14 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     }
     case 'quote':
       return (
-        <blockquote key={key} {...{ [anim]: '' } as any} style={{ ...style, borderLeft: `4px solid ${tokens.accent2}`, paddingLeft: '24px', fontStyle: 'italic', fontSize: 'clamp(20px, 2.6vw, 32px)', lineHeight: 1.4, color: tokens.text }}>
+        <blockquote key={key} {...animProps} style={{ ...style, borderLeft: `4px solid ${tokens.accent2}`, paddingLeft: '24px', fontStyle: 'italic', fontSize: 'clamp(20px, 2.6vw, 32px)', lineHeight: 1.4, ...styleOverrides }}>
           "{el.text}"
           {el.author && <footer style={{ marginTop: '14px', fontSize: '15px', color: tokens.textMuted, fontStyle: 'normal' }}>— {el.author}</footer>}
         </blockquote>
       )
     case 'code':
       return (
-        <pre key={key} {...{ [anim]: '' } as any} style={{ ...style, background: '#0a0a14', border: `1px solid ${tokens.border}`, borderRadius: tokens.radius, padding: '20px', overflow: 'auto', fontSize: '14px', fontFamily: 'ui-monospace, monospace', color: '#c8c8ff' }}>
+        <pre key={key} {...animProps} style={{ ...style, background: '#0a0a14', border: `1px solid ${tokens.border}`, borderRadius: tokens.radius, padding: '20px', overflow: 'auto', fontSize: '14px', fontFamily: 'ui-monospace, monospace', color: '#c8c8ff' }}>
           <code>{el.code}</code>
         </pre>
       )
@@ -228,7 +247,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
       const headers = el.headers || []
       const rows = el.rows || []
       return (
-        <div key={key} {...{ [anim]: '' } as any} style={{ ...style, overflowX: 'auto' }}>
+        <div key={key} {...animProps} style={{ ...style, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px' }}>
             {headers.length > 0 && (
               <thead>
@@ -254,8 +273,51 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     }
     case 'icon':
       return (
-        <span key={key} {...{ [anim]: '' } as any} title={el.label || el.name} style={{ fontSize: '28px' }}>{iconFor(el.name)}</span>
+        <span key={key} {...animProps} title={el.label || el.name} style={{ fontSize: '28px' }}>{iconFor(el.name)}</span>
       )
+    case 'video': {
+      const vidSrc = resolvedSrc
+      return (
+        <video
+          key={key}
+          src={vidSrc ?? undefined}
+          poster={el.poster ?? undefined}
+          controls
+          autoPlay={el.autoplay && activeSlideActive}
+          muted={el.autoplay}
+          style={{ width: '100%', borderRadius: tokens.radiusLg, display: 'block', border: `1px solid ${tokens.border}` }}
+        />
+      )
+    }
+    case 'audio':
+      return (
+        <audio key={key} src={resolvedSrc ?? undefined} controls style={{ width: '100%' }} />
+      )
+    case 'shape': {
+      const fill = el.fill || tokens.accent
+      const shapeStyle: CSSProperties = {
+        width: '100%',
+        height: '100%',
+        minHeight: 24,
+        display: 'block',
+        ...styleOverrides,
+      }
+      if (el.shape === 'circle') {
+        return <div key={key} {...animProps} style={{ ...shapeStyle, borderRadius: '50%', background: fill }} />
+      }
+      if (el.shape === 'line') {
+        return <div key={key} {...animProps} style={{ ...shapeStyle, height: 4, minHeight: 4, borderRadius: 2, background: fill }} />
+      }
+      if (el.shape === 'arrow') {
+        return (
+          <svg key={key} {...animProps} style={shapeStyle} viewBox="0 0 100 40" preserveAspectRatio="none">
+            <line x1="0" y1="20" x2="82" y2="20" stroke={fill} strokeWidth="6" strokeLinecap="round" />
+            <polygon points="80,6 100,20 80,34" fill={fill} />
+          </svg>
+        )
+      }
+      return <div key={key} {...animProps} style={{ ...shapeStyle, borderRadius: tokens.radius, background: fill }} />
+    }
     case 'statistics':
     case 'cards':
     case 'timeline':

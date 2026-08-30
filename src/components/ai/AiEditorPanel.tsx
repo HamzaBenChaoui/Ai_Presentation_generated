@@ -5,6 +5,8 @@ import remarkGfm from 'remark-gfm'
 import { cn } from '../../lib/cn'
 import { useChat } from './ChatContext'
 import { useEditor } from '../editor/EditorContext'
+import { getSettings, updateSettings } from '../../lib/settings'
+import ModelSelect from './ModelSelect'
 import type { ToolStep } from '../../types'
 
 interface Props {
@@ -59,15 +61,21 @@ const QUICK_ACTIONS = [
 ]
 
 export default function AiEditorPanel({ presentationId: _presentationId, onClose }: Props) {
-  const { messages, loading, streaming, error, send, editMessage, clear, retryLast, canEdit, accessRole } = useChat()
+  const { messages, loading, streaming, error, send, editMessage, clear, retryLast, canEdit, accessRole, stop } = useChat()
   const { undo, canUndo } = useEditor()
   const [input, setInput] = useState('')
+  const [aiModel, setAiModel] = useState(() => getSettings().aiModel)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editInputRef = useRef<HTMLTextAreaElement>(null)
+
+  const changeModel = useCallback((model: string) => {
+    setAiModel(model)
+    updateSettings({ aiModel: model })
+  }, [])
 
   // Auto-scroll on messages or streaming
   useEffect(() => {
@@ -148,11 +156,14 @@ export default function AiEditorPanel({ presentationId: _presentationId, onClose
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent2 shrink-0">
             <Sparkles size={11} className="text-white" />
           </span>
           <span className="text-sm font-semibold text-text">Slide AI</span>
+          {canEdit && (
+            <ModelSelect compact value={aiModel} onChange={changeModel} className="ml-1" />
+          )}
         </div>
         <div className="flex items-center gap-1">
           {canEdit && (
@@ -320,16 +331,27 @@ export default function AiEditorPanel({ presentationId: _presentationId, onClose
             target.style.height = Math.min(target.scrollHeight, 120) + 'px'
           }}
         />
-        <button
-          type="submit"
-          disabled={streaming || loading || !input.trim()}
-          className={cn(
-            'p-2 rounded-lg bg-gradient-to-br from-accent to-accent2 text-white transition-all cursor-pointer shrink-0',
-            'shadow-md shadow-accent/30 hover:shadow-lg hover:shadow-accent/40 disabled:opacity-40 disabled:cursor-default',
-          )}
-        >
-          <Send size={14} />
-        </button>
+        {streaming ? (
+          <button
+            type="button"
+            onClick={stop}
+            title="Stop the AI request"
+            className="p-2 rounded-lg border border-red-500/50 bg-red-500/10 text-red-400 transition-all cursor-pointer shrink-0 hover:bg-red-500/20"
+          >
+            <span className="block w-3 h-3 bg-current rounded-[2px]" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className={cn(
+              'p-2 rounded-lg bg-gradient-to-br from-accent to-accent2 text-white transition-all cursor-pointer shrink-0',
+              'shadow-md shadow-accent/30 hover:shadow-lg hover:shadow-accent/40 disabled:opacity-40 disabled:cursor-default',
+            )}
+          >
+            <Send size={14} />
+          </button>
+        )}
       </form>
     </div>
   )

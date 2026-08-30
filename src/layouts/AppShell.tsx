@@ -9,6 +9,7 @@ import {
   Image,
   Users,
   Settings,
+  Cable,
   Sparkles,
 } from 'lucide-react'
 import { cn } from '../lib/cn'
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/assets', label: 'Assets', icon: Image },
   { to: '/workspaces', label: 'Workspaces', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/mcp', label: 'MCP', icon: Cable },
 ]
 
 function getInitialCollapsed(): boolean {

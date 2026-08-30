@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Maximize, Minimize, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize, Minimize, MonitorSpeaker, StickyNote, Timer, X } from 'lucide-react'
 import type { PresentationSpec } from '../../types'
 import SlideRenderer from './SlideRenderer'
 import { tokenFor } from './theme'
@@ -87,6 +87,23 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
   const [exiting, setExiting] = useState<Exiting | null>(null)
   const [direction, setDirection] = useState<Dir>('forward')
   const [isFs, setIsFs] = useState(false)
+  const [presenter, setPresenter] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  // Rehearsal mode: records seconds spent per slide; timings drive auto-play.
+  const [rehearseMode, setRehearseMode] = useState(false)
+  const [timings, setTimings] = useState<number[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('slideai.rehearsal') || '[]')
+      return Array.isArray(saved) ? saved : []
+    } catch {
+      return []
+    }
+  })
+  const [autoPlaying, setAutoPlaying] = useState(false)
+  const slideStartRef = useRef<number>(0)
+  // Dual-screen presenter: the notes window listens on this channel.
+  const sessionIdRef = useRef('')
+  const channelRef = useRef<BroadcastChannel | null>(null)
   const [box, setBox] = useState({ w: window.innerWidth, h: window.innerHeight })
   const containerRef = useRef<HTMLDivElement>(null)
   const exitTimer = useRef<number>(undefined as unknown as number)
@@ -116,6 +133,81 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
   )
 
   useEffect(() => () => window.clearTimeout(exitTimer.current), [])
+
+  // Presenter timer: counts up from player mount.
+  useEffect(() => {
+    if (!presenter) return
+    const id = window.setInterval(() => setElapsed((t) => t + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [presenter])
+
+  // Rehearsal: record seconds spent on the slide being left.
+  useEffect(() => {
+    slideStartRef.current = Date.now()
+    if (!rehearseMode) return
+    return () => {
+      const secs = Math.round((Date.now() - slideStartRef.current) / 1000)
+      setTimings((t) => {
+        const n = [...t]
+        n[index] = secs
+        return n
+      })
+    }
+  }, [index, rehearseMode])
+
+  // Auto-advance using the recorded rehearsal timings.
+  useEffect(() => {
+    if (!autoPlaying) return
+    if (index >= total - 1) {
+      // Defer the state reset to a microtask — not synchronously in effect.
+      const stop = window.setTimeout(() => setAutoPlaying(false), 0)
+      return () => window.clearTimeout(stop)
+    }
+    const seconds = Math.max(1, timings[index] || 5)
+    const id = window.setTimeout(() => go(index + 1), seconds * 1000)
+    return () => window.clearTimeout(id)
+  }, [autoPlaying, index, timings, go, total])
+
+  // Dual-screen presenter: broadcast state to the notes window.
+  useEffect(() => {
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = Math.random().toString(36).slice(2)
+    }
+    const ch = new BroadcastChannel(`slideai-present-${sessionIdRef.current}`)
+    channelRef.current = ch
+    return () => ch.close()
+  }, [])
+  useEffect(() => {
+    channelRef.current?.postMessage({
+      type: 'state',
+      index,
+      total,
+      elapsed,
+      notes: spec.slides[index]?.notes || '',
+      next: spec.slides[index + 1]?.elements.find((e) => e.text)?.text?.slice(0, 80) || '',
+    })
+  }, [index, elapsed, total, spec])
+
+  const toggleRehearse = () => {
+    setRehearseMode((v) => {
+      if (v) {
+        // Turning off → persist the recorded timings.
+        try {
+          localStorage.setItem('slideai.rehearsal', JSON.stringify(timings))
+        } catch {
+          /* storage unavailable */
+        }
+      } else {
+        slideStartRef.current = Date.now()
+        setAutoPlaying(false)
+      }
+      return !v
+    })
+  }
+
+  const openNotesWindow = () => {
+    window.open(`/present-notes?ch=${sessionIdRef.current}`, 'slideai-notes', 'width=430,height=660')
+  }
 
   const goNext = useCallback(() => go(index + 1), [go, index])
   const goPrev = useCallback(() => go(index - 1), [go, index])
@@ -216,6 +308,15 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [index, total, goNext, goPrev, go, onExit, toggleFullscreen])
+
+  // Presenter panel toggle (P)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'p' || e.key === 'P') setPresenter((v) => !v)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Touch swipe
   const touchStartX = useRef<number | null>(null)
@@ -407,6 +508,51 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
             {isFs ? <Minimize size={16} /> : <Maximize size={16} />}
           </button>
           <button
+            onClick={toggleRehearse}
+            title={rehearseMode ? 'Rehearsal ON — timings recorded (Timer, T)' : 'Rehearse: record time per slide'}
+            style={{
+              padding: 8,
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: rehearseMode ? 'rgba(234,88,12,0.5)' : 'rgba(20,20,32,0.4)',
+              backdropFilter: 'blur(8px)',
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            <Timer size={16} />
+          </button>
+          <button
+            onClick={openNotesWindow}
+            title="Open dual-screen notes window"
+            style={{
+              padding: 8,
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(20,20,32,0.4)',
+              backdropFilter: 'blur(8px)',
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            <MonitorSpeaker size={16} />
+          </button>
+          <button
+            onClick={() => setPresenter((v) => !v)}
+            title="Presenter view (P) — notes, timer, next slide"
+            style={{
+              padding: 8,
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: presenter ? 'rgba(234,88,12,0.5)' : 'rgba(20,20,32,0.4)',
+              backdropFilter: 'blur(8px)',
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            <StickyNote size={16} />
+          </button>
+          <button
             onClick={onExit}
             title="Exit (Esc)"
             style={{
@@ -438,6 +584,65 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
             <ChevronRight size={18} />
           </button>
         </div>
+
+        {/* Presenter overlay: notes + timer + next slide. */}
+        {presenter && (
+          <div
+            style={{
+              position: 'absolute',
+              right: 16,
+              bottom: 64,
+              width: 'min(360px, 80vw)',
+              maxHeight: '60%',
+              overflow: 'auto',
+              borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.14)',
+              background: 'rgba(12,12,20,0.88)',
+              backdropFilter: 'blur(10px)',
+              color: '#fff',
+              padding: 16,
+              zIndex: 60,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <strong style={{ fontSize: 13, opacity: 0.85 }}>
+                Slide {index + 1} / {total}
+              </strong>
+              <strong style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', opacity: 0.85 }}>
+                {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
+              </strong>
+            </div>
+            {index < total - 1 && spec.slides[index + 1]?.elements.some((e) => e.text) && (
+              <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>
+                Next: {spec.slides[index + 1].elements.find((e) => e.text)?.text?.slice(0, 60)}
+              </div>
+            )}
+            {rehearseMode && (
+              <div style={{ fontSize: 12, marginBottom: 10, padding: '6px 8px', borderRadius: 8, background: 'rgba(234,88,12,0.15)' }}>
+                Rehearsal recording — time per slide is being tracked.
+                <button
+                  onClick={() => setAutoPlaying((v) => !v)}
+                  style={{
+                    display: 'block',
+                    marginTop: 6,
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    border: 'none',
+                    background: autoPlaying ? 'rgba(255,255,255,0.25)' : 'rgba(234,88,12,0.8)',
+                    color: '#fff',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {autoPlaying ? 'Stop auto-play' : 'Play with recorded timings'}
+                </button>
+              </div>
+            )}
+            <div style={{ fontSize: 14, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+              {spec.slides[index]?.notes || 'No speaker notes on this slide.'}
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body,
