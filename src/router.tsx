@@ -48,7 +48,10 @@ function RequireAuth() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to={`/login?next=${encodeURIComponent(location.pathname)}`} replace />
+    // Keep pathname AND query — flows like /oauth/authorize?auth_id=...
+    // must survive the login round-trip.
+    const target = location.pathname + location.search
+    return <Navigate to={`/login?next=${encodeURIComponent(target)}`} replace />
   }
 
   return <Outlet />
