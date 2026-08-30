@@ -6,7 +6,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Undo2,
@@ -448,6 +448,16 @@ export default function EditorPage() {
   const [aiEditOpen, setAiEditOpen] = useState(false)
   const [doctorOpen, setDoctorOpen] = useState(false)
   const [accessRole, setAccessRole] = useState<string | null>(null)
+
+  // Proactive Deck Doctor: decks created by AI generation open with a scan.
+  const location = useLocation()
+  useEffect(() => {
+    const state = location.state as { runDoctor?: boolean } | null
+    if (state?.runDoctor) {
+      setDoctorOpen(true)
+      window.history.replaceState({}, '')
+    }
+  }, [location.state])
 
   // toolbar undo/redo/save state, mirrored from the editor context
   const [toolbarState, setToolbarState] = useState<ToolbarState>({

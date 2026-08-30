@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
 import { publicSharesApi, ApiClientError, type ShareComment } from '../lib/api'
 import type { PresentationSpec } from '../types'
@@ -52,6 +52,31 @@ export default function SharedView({ token, password: initialPassword }: Props) 
       })
       .finally(() => setLoading(false))
   }, [token, activePassword])
+
+  // Time-per-slide analytics: recorded locally, sent when the tab is closed
+  // or hidden so the owner can see which slides hold attention.
+  const slideStartRef = useRef(Date.now())
+  const timeMapRef = useRef<Record<string, number>>({})
+  useEffect(() => {
+    slideStartRef.current = Date.now()
+    return () => {
+      const secs = Math.round((Date.now() - slideStartRef.current) / 1000)
+      if (secs > 0) {
+        const key = String(index)
+        timeMapRef.current[key] = (timeMapRef.current[key] || 0) + secs
+      }
+      slideStartRef.current = Date.now()
+    }
+  }, [index])
+
+  useEffect(() => {
+    const send = () => {
+      const data = JSON.stringify({ time_json: timeMapRef.current })
+      navigator.sendBeacon?.(`/api/v1/shared/${token}/analytics`, new Blob([data], { type: 'application/json' }))
+    }
+    window.addEventListener('pagehide', send)
+    return () => window.removeEventListener('pagehide', send)
+  }, [token])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

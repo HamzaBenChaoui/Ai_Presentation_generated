@@ -56,6 +56,7 @@ export default function DeckDoctorModal({ open, onClose, presentationId }: Props
       const slideEl = container.firstElementChild
       const diagnostics = slideEl instanceof HTMLElement ? collectSlideDiagnostics(slideEl) : []
 
+      // Deterministic content-quality checks.
       const contentNotes: string[] = []
       const slide = spec.slides[slideIndex]
       if (slide && slide.layout !== 'custom') {
@@ -63,6 +64,34 @@ export default function DeckDoctorModal({ open, onClose, presentationId }: Props
           contentNotes.push('empty slide — add content or remove it')
         } else if (!slide.elements.some((e) => (e.text ?? '').trim())) {
           contentNotes.push('no readable text on this slide — add a title or some content')
+        }
+        if (slide.layout !== 'blank' && slide.elements.length > 9) {
+          contentNotes.push(`overloaded slide (${slide.elements.length} elements) — split it or move extras to a new slide`)
+        }
+        for (const el of slide.elements) {
+          const text = (el.text ?? '').trim()
+          if (el.type === 'title' && text.length > 70) {
+            contentNotes.push(`title too long (${text.length} chars) — aim for under 70`)
+            break
+          }
+        }
+        const bullets = slide.elements.find((e) => e.type === 'bullets')
+        if (bullets && (bullets.items?.length ?? 0) > 7) {
+          contentNotes.push(`${bullets.items?.length} bullet points — split into two slides or trim to 5-7`)
+        }
+        const stats = slide.elements.find((e) => e.type === 'statistics')
+        if (stats) {
+          const empty = (stats.items ?? []).filter((it) => !String(it.value ?? '').trim())
+          if (empty.length > 0) {
+            contentNotes.push(`${empty.length} statistic(s) with no value`)
+          }
+        }
+        for (const el of slide.elements) {
+          const text = (el.text ?? '').trim()
+          if (text && el.type !== 'title' && text.split(/\s+/).length > 45) {
+            contentNotes.push('paragraph is very long (>45 words) — tighten it or use bullets')
+            break
+          }
         }
       }
 

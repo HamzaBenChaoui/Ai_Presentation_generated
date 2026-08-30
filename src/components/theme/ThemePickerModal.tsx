@@ -94,7 +94,7 @@ export default function ThemePickerModal({ prompt, slideCount, tone, language, o
         theme: selected,
         model: getSettings().aiModel || null,
       })
-      navigate(`/editor/${created.id}`)
+      navigate(`/editor/${created.id}`, { state: { runDoctor: true } })
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : 'Generation failed'
       toast.error(msg)

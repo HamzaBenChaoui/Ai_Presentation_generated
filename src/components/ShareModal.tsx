@@ -219,6 +219,26 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
                     <span title="Reviewer comments">💬 {share.comments.length}</span>
                   )}
                 </div>
+                {share.slide_time_json && Object.keys(share.slide_time_json).length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-dim mb-1">
+                      Attention per slide
+                    </div>
+                    <div className="flex items-end gap-1 h-10">
+                      {Object.entries(share.slide_time_json).map(([slideIdx, secs]) => {
+                        const max = Math.max(...Object.values(share.slide_time_json!), 1)
+                        return (
+                          <div
+                            key={slideIdx}
+                            title={`Slide ${Number(slideIdx) + 1}: ${secs}s`}
+                            className="flex-1 rounded-t bg-gradient-to-t from-accent/40 to-accent min-w-[6px]"
+                            style={{ height: `${Math.max(8, (Number(secs) / max) * 100)}%` }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 {share.comments && share.comments.length > 0 && (
                   <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
                     {share.comments.slice(-5).map((c, ci) => (

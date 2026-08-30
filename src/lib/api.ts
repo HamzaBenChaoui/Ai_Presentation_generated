@@ -9,7 +9,7 @@
 
 export const API_BASE = "/api/v1";
 
-import type { Presentation, PresentationList, FileAsset, FileList, PresentationSpec, ChatListResponse } from "./../types";
+import type { Presentation, PresentationList, FileAsset, FileList, PresentationSpec, ChatListResponse, SlideSpec } from "./../types";
 
 export interface User {
   id: string;
@@ -198,6 +198,25 @@ export interface ModelsResponse {
 export const modelsApi = {
   list() {
     return request<ModelsResponse>("GET", "/models");
+  },
+};
+
+export interface LibrarySlide {
+  id: string;
+  title: string;
+  slide: SlideSpec;
+  created_at: string;
+}
+
+export const slideLibraryApi = {
+  list() {
+    return request<{ slides: LibrarySlide[] }>("GET", "/slide-library");
+  },
+  save(title: string, slide: SlideSpec) {
+    return request<LibrarySlide>("POST", "/slide-library", { title, slide });
+  },
+  remove(id: string) {
+    return request<void>("DELETE", `/slide-library/${id}`);
   },
 };
 
@@ -442,6 +461,8 @@ export interface ShareInfo {
   created_at: string;
   view_count?: number;
   comments?: ShareComment[];
+  /** Seconds spent per slide by shared-deck viewers: {"0": 12, "1": 8} */
+  slide_time_json?: Record<string, number> | null;
 }
 
 export interface CreateShareRequest {
@@ -480,6 +501,16 @@ export const publicSharesApi = {
     return request<ShareComment>("POST", `/shared/${token}/comments`, {
       content,
       author_name: authorName || null,
+    });
+  },
+  /** Fire-and-forget time-per-slide analytics from a shared-deck viewer. */
+  postSlideTime(token: string, timeJson: Record<string, number>) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    return fetch(`${API_BASE}/shared/${token}/analytics`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ time_json: timeJson }),
+      keepalive: true,
     });
   },
 };

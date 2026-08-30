@@ -1,8 +1,24 @@
-import { useState } from 'react'
-import { Play, ArrowUp, ArrowDown, Sparkles, Film } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Play, ArrowUp, ArrowDown, Sparkles, Film, Mic, MicOff, StickyNote } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useEditor } from './EditorContext'
 import type { SpecElement } from '../../types'
+
+// Minimal Web Speech API surface (Chrome/Edge).
+interface SpeechRecognitionLike {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
+  const w = window as unknown as Record<string, unknown>
+  return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null
+}
 
 const BUILT_IN_ANIMATIONS = [
   'fade', 'slide', 'scale', 'zoom', 'rotate', 'blur',
@@ -22,10 +38,41 @@ interface Props {
 export default function MotionPanel({ slideIndex, onReplay }: Props) {
   const { spec, updateElement, updateSlide } = useEditor()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
   if (!spec) return null
   const slide = spec.slides[slideIndex]
   if (!slide) return null
+
+  const notes = slide.notes ?? ''
+
+  const toggleDictation = () => {
+    if (listening) {
+      recognitionRef.current?.stop()
+      return
+    }
+    const Recognition = getSpeechRecognition()
+    if (!Recognition) {
+      return
+    }
+    const rec = new Recognition()
+    rec.lang = spec.meta.language === 'French' ? 'fr-FR' : 'en-US'
+    rec.continuous = true
+    rec.interimResults = false
+    rec.onresult = (event) => {
+      let transcript = ''
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0]?.transcript ?? ''
+      }
+      const base = slide.notes ? slide.notes.trim() + ' ' : ''
+      updateSlide(slideIndex, { notes: (base + transcript).trim() })
+    }
+    rec.onend = () => setListening(false)
+    recognitionRef.current = rec
+    setListening(true)
+    rec.start()
+  }
 
   const customAnims = (spec.meta.customAnimations ?? []).map((d) => d.name).filter(Boolean)
 
@@ -158,6 +205,37 @@ export default function MotionPanel({ slideIndex, onReplay }: Props) {
             </div>
           )
         })}
+
+        {/* Speaker notes + voice dictation */}
+        <div className="mt-2 rounded-xl border border-border bg-surface2/50 p-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-text">
+              <StickyNote size={12} className="text-accent" />
+              Speaker notes
+            </span>
+            <button
+              onClick={toggleDictation}
+              disabled={!getSpeechRecognition()}
+              title={getSpeechRecognition() ? (listening ? 'Stop dictation' : 'Dictate notes with your voice') : 'Voice dictation not supported in this browser'}
+              className={cn(
+                'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-colors cursor-pointer',
+                listening
+                  ? 'border-red-500/50 bg-red-500/15 text-red-400 animate-pulse'
+                  : 'border-border text-text-dim hover:text-accent hover:border-accent/40',
+                'disabled:opacity-40 disabled:cursor-default',
+              )}
+            >
+              {listening ? <MicOff size={11} /> : <Mic size={11} />}
+              {listening ? 'Stop' : 'Dictate'}
+            </button>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => updateSlide(slideIndex, { notes: e.target.value })}
+            placeholder="Speaker notes for this slide — type or dictate…"
+            className="w-full min-h-[70px] rounded-lg border border-border bg-bg p-2 text-xs text-text placeholder:text-text-dim focus:outline-none focus:ring-1 focus:ring-accent resize-y"
+          />
+        </div>
       </div>
     </div>
   )

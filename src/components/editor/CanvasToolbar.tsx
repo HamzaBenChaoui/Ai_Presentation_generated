@@ -5,6 +5,8 @@ import { useEditor } from './EditorContext'
 import ImagePickerModal from './ImagePickerModal'
 import { convertSlideToCustom } from '../../lib/convertToCustom'
 import { useDeckTheme } from '../renderer/DeckThemeContext'
+import SlideLibraryModal from './SlideLibraryModal'
+import { Library } from 'lucide-react'
 import type { SpecElement, LayoutName } from '../../types'
 
 const LAYOUTS: LayoutName[] = [
@@ -41,6 +43,7 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
   const [imagePickerOpen, setImagePickerOpen] = useState(false)
   const [mediaPicker, setMediaPicker] = useState<'video' | 'audio' | null>(null)
   const [chartEditorOpen, setChartEditorOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const deck = useDeckTheme()
 
   if (!spec) return null
@@ -72,6 +75,10 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
       <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-dim px-1">
         Insert
       </span>
+      <button className={btnClass()} onClick={() => setLibraryOpen(true)} title="Insert a slide saved in your library">
+        <Library size={14} />
+        Library
+      </button>
       <button className={btnClass()} onClick={() => insert({ type: 'title', text: '', level: 2, w: 70 })} title="Add a heading">
         <Heading1 size={14} />
         Heading
@@ -397,6 +404,9 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
             ))}
           </div>
         </div>
+      )}
+      {libraryOpen && (
+        <SlideLibraryModal open={libraryOpen} onClose={() => setLibraryOpen(false)} />
       )}
     </div>
   )
