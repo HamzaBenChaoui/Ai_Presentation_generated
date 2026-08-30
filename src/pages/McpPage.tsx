@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Cable, Check, CheckCircle2, Copy, Eye, EyeOff, GraduationCap, KeyRound, Link2,
-  MonitorSmartphone, RefreshCw, ShieldAlert, Sparkles,
+  Cable, Check, Copy, Eye, EyeOff, KeyRound, Link2, RefreshCw, ShieldAlert, Sparkles,
 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { Spinner } from '../components/ui/Spinner'
-import { authApi, getAccessToken, request, ApiClientError, API_BASE } from '../lib/api'
+import { authApi, getAccessToken, ApiClientError, API_BASE } from '../lib/api'
 import { cn } from '../lib/cn'
 
 const easeOut = [0.22, 1, 0.36, 1] as const
@@ -59,38 +58,45 @@ function buildSetups(url: string, token: string): Record<ClientKey, ClientSetup>
       label: 'ZKR',
       file: '.mcp.json  (racine du projet)',
       cli: {
-        label: 'Ou en une commande :',
-        command: `zkr mcp add --transport http slide-ai ${url} --header "Authorization: Bearer ${token}"`,
+        label: 'Ou en une commande (aucun token nécessaire) :',
+        command: `zkr mcp add --transport http slide-ai ${url}`,
       },
       format: 'json',
       config: JSON.stringify(
         {
           mcpServers: {
-            'slide-ai': { type: 'http', url, headers: { Authorization: `Bearer ${token}` } },
+            'slide-ai': { type: 'http', url },
           },
         },
         null,
         2,
       ),
+      notes: [
+        'Lance ZKR puis /mcp → slide-ai → Authenticate : le navigateur s’ouvre, clique « Approve » — connecté 30 jours, zéro token à copier.',
+        'Si tu préfères un token manuel : bouton « Token 30j » ci-dessus, puis ajoute "headers": { "Authorization": "Bearer <TOKEN>" } dans la config.',
+      ],
     },
     'claude-code': {
       key: 'claude-code',
       label: 'Claude Code',
       file: '.mcp.json  (project root)  ou  ~/.claude.json',
       cli: {
-        label: 'Ou en une commande :',
-        command: `claude mcp add --transport http slide-ai ${url} --header "Authorization: Bearer ${token}"`,
+        label: 'Ou en une commande (aucun token nécessaire) :',
+        command: `claude mcp add --transport http slide-ai ${url}`,
       },
       format: 'json',
       config: JSON.stringify(
         {
           mcpServers: {
-            'slide-ai': { type: 'http', url, headers: { Authorization: `Bearer ${token}` } },
+            'slide-ai': { type: 'http', url },
           },
         },
         null,
         2,
       ),
+      notes: [
+        'Puis /mcp → slide-ai → Authenticate : le navigateur s’ouvre, clique « Approve » — connecté 30 jours, zéro token à copier.',
+      ],
     },
     cursor: {
       key: 'cursor',
@@ -217,9 +223,7 @@ export default function McpPage() {
   const [mintError, setMintError] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   // Device flow (one-click connect)
-  const [pairing, setPairing] = useState<{ deviceCode: string; userCode: string } | null>(null)
-  const [pairStatus, setPairStatus] = useState<'pending' | 'approved' | 'error'>('pending')
-  const [pairError, setPairError] = useState<string | null>(null)
+
 
   /** Mint a dedicated 30-day MCP token so agents don't die with the 1h session. */
   const mintMcpToken = async () => {
@@ -242,36 +246,7 @@ export default function McpPage() {
     }
   }
 
-  /** One-click connect: device flow — approve in the browser, no copy-paste. */
-  const startDeviceFlow = async () => {
-    setPairError(null)
-    try {
-      const res = await request<{ device_code: string; user_code: string; verification_url: string }>(
-        'POST',
-        '/auth/device/start',
-      )
-      setPairing({ deviceCode: res.device_code, userCode: res.user_code })
-      setPairStatus('pending')
-    } catch (err) {
-      setPairError(err instanceof ApiClientError ? err.message : 'Could not start pairing')
-    }
-  }
 
-  // Poll the pairing status while a device flow is active.
-  useEffect(() => {
-    if (!pairing || pairStatus !== 'pending') return
-    const id = window.setInterval(async () => {
-      try {
-        const res = await request<{ status: string }>('POST', '/auth/device/poll', {
-          device_code: pairing.deviceCode,
-        })
-        if (res.status === 'approved') setPairStatus('approved')
-      } catch {
-        /* keep polling */
-      }
-    }, 2000)
-    return () => window.clearInterval(id)
-  }, [pairing, pairStatus])
 
   const setups = useMemo(() => buildSetups(baseUrl.trim(), token.trim() || '<VOTRE_TOKEN>'), [baseUrl, token])
   const active = setups[tab]
@@ -342,98 +317,6 @@ export default function McpPage() {
         </Card>
       </motion.div>
 
-      {/* One-click connect (device flow) */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.08, ease: easeOut }}
-        className="relative"
-      >
-        <Card className="p-5 sm:p-6 border-accent/30">
-          <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent/20 to-accent2/20 text-accent ring-1 ring-accent/20">
-              <MonitorSmartphone size={17} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-[family-name:var(--font-display)] text-base font-semibold text-text">
-                Connexion en 1 clic — sans copier-coller
-              </h3>
-              <p className="text-xs text-text-dim mt-0.5 mb-3">
-                Génère un code, approuve-le ici dans le navigateur : ta CLI (ZKR, Claude Code…)
-                reçoit automatiquement un token de <span className="font-bold text-text">30 jours</span>.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={startDeviceFlow}
-                  disabled={!!pairing && pairStatus === 'pending'}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent2 text-white text-xs font-semibold shadow-md shadow-accent/30 hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                >
-                  {pairing && pairStatus === 'pending' ? <Spinner size="sm" /> : <MonitorSmartphone size={14} />}
-                  {pairing ? 'En attente d’approbation…' : 'Connecter une CLI'}
-                </button>
-                <button
-                  onClick={() => window.open(`${API_BASE}/skill/slide-ai.zip`, '_blank')}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-xs font-semibold text-text-muted hover:text-accent hover:border-accent/40 transition-colors cursor-pointer"
-                  title="Télécharge le Skill slide-ai : un guide installable qui apprend à ton IA à utiliser le MCP au mieux"
-                >
-                  <GraduationCap size={14} />
-                  Skill slide-ai (.zip)
-                </button>
-              </div>
-
-              {pairError && <p className="mt-2 text-xs text-red-400">{pairError}</p>}
-
-              {pairing && (
-                <div className="mt-4 rounded-xl border border-border bg-bg/60 p-4">
-                  {pairStatus === 'pending' && (
-                    <>
-                      <p className="text-xs text-text-muted mb-2">
-                        1. Ouvre la page d’autorisation :
-                      </p>
-                      <button
-                        onClick={() => window.open(`/oauth/device?user_code=${pairing.userCode}`, '_blank')}
-                        className="mb-3 text-xs font-semibold text-accent hover:underline cursor-pointer"
-                      >
-                        {window.location.origin}/oauth/device?user_code={pairing.userCode}
-                      </button>
-                      <p className="text-xs text-text-muted">
-                        2. Ou saisis ce code sur la page d’autorisation :
-                      </p>
-                      <div className="mt-1 py-2 rounded-lg border border-accent/40 bg-accent/5 inline-block px-4">
-                        <span className="text-2xl font-bold tracking-[0.25em] text-accent">{pairing.userCode}</span>
-                      </div>
-                      <p className="mt-2 text-[11px] text-text-dim flex items-center gap-1.5">
-                        <Spinner size="sm" /> En attente d’approbation dans le navigateur…
-                      </p>
-                    </>
-                  )}
-                  {pairStatus === 'approved' && (
-                    <p className="text-sm text-emerald-400 font-semibold flex items-center gap-2">
-                      <CheckCircle2 size={16} />
-                      CLI connectée pour 30 jours — c’est fait !
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Badge variant="default">Claude Code / ZKR : OAuth auto — ajoute le serveur sans header, l’outil ouvre le navigateur</Badge>
-                <Badge variant="default">
-                  <a
-                    href={`${API_BASE}/.well-known/oauth-authorization-server`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:underline"
-                  >
-                    Métadonnées OAuth
-                  </a>
-                </Badge>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </motion.div>
-
       {/* Setup builder */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -454,6 +337,29 @@ export default function McpPage() {
                 Vérifie l&apos;URL du serveur et ton token, puis copie le bloc de ton application.
               </p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 -mt-2 mb-4">
+            <Badge variant="default">
+              <a
+                href={`${API_BASE}/skill/slide-ai.zip`}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
+                ⬇ Skill slide-ai (.zip) — installe le guide dans ZKR / Claude Code / Codex
+              </a>
+            </Badge>
+            <Badge variant="default">
+              <a
+                href={`${API_BASE}/.well-known/oauth-authorization-server`}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
+                OAuth auto : ajoute le serveur SANS token, clique Authenticate → le navigateur s’ouvre (30 jours)
+              </a>
+            </Badge>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-3xl">

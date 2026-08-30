@@ -101,6 +101,7 @@ export const router = createBrowserRouter([
           { path: 'settings', element: <SettingsPage /> },
           { path: 'mcp', element: <McpPage /> },
           { path: 'oauth/authorize', element: <OAuthAuthorizePage /> },
+          { path: 'oauth/device', element: <OAuthAuthorizePage /> },
         ],
       },
       {
