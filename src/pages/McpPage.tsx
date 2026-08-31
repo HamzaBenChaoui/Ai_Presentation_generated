@@ -473,7 +473,7 @@ export default function McpPage() {
               code={active.config}
               fileName={active.file}
               format={active.format}
-              highlight="<TON_TOKEN>"
+              highlight={active.format === 'toml' ? 'SLIDE_AI_TOKEN' : '<TON_TOKEN>'}
             />
             {active.cli && (
               <>
