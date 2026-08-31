@@ -769,7 +769,10 @@ export default function EditorPage() {
             size="sm"
             title="Present"
             className="rounded-xl bg-gradient-to-r from-accent to-accent2 text-white shadow-md shadow-accent/30 hover:from-accent hover:to-accent2 hover:shadow-lg hover:shadow-accent/40"
-            onClick={() => setPresenting(true)}
+            onClick={() => {
+              editorBridgeRef.current?.forceSave() // never enter present mode with pending edits
+              setPresenting(true)
+            }}
           >
             <Play size={14} />
             <span>Present</span>
@@ -810,31 +813,31 @@ export default function EditorPage() {
 
       {!loading && !error && initialSpec && (
         <DeckThemeProvider initial={initialSpec.meta?.theme as ThemeName | null}>
-          {presenting && liveSpec ? (
-            <FullscreenPlayer spec={liveSpec} onExit={() => setPresenting(false)} />
-          ) : (
-            <>
-              {/* Single EditorProvider owns the spec for navigator + canvas +
-                 AI + history. liveSpec is mirrored from the editor via
-                 onSpecChange so the present mode stays in sync too. */}
-              <EditorBody
-                presentationId={id!}
-                initialSpec={initialSpec}
-                initialUpdatedAt={initialUpdatedAt}
-                index={index}
-                setIndex={setIndex}
-                inspectorTab={inspectorTab}
-                setInspectorTab={setInspectorTab}
-                onSpecChange={setLiveSpec}
-                onCloseAi={() => setInspectorTab('history')}
-                bridgeRef={editorBridgeRef}
-                onToolbarState={setToolbarState}
-                aiEditOpen={aiEditOpen}
-                setAiEditOpen={setAiEditOpen}
-                doctorOpen={doctorOpen}
-                setDoctorOpen={setDoctorOpen}
-              />
-            </>
+          {/* EditorBody ALWAYS stays mounted: exiting present mode (or a
+              reload mid-edit) must never wipe editor state or pending saves.
+              The player renders as a full-screen overlay above it. */}
+          <EditorBody
+            presentationId={id!}
+            initialSpec={initialSpec}
+            initialUpdatedAt={initialUpdatedAt}
+            index={index}
+            setIndex={setIndex}
+            inspectorTab={inspectorTab}
+            setInspectorTab={setInspectorTab}
+            onSpecChange={setLiveSpec}
+            onCloseAi={() => setInspectorTab('history')}
+            bridgeRef={editorBridgeRef}
+            onToolbarState={setToolbarState}
+            aiEditOpen={aiEditOpen}
+            setAiEditOpen={setAiEditOpen}
+            doctorOpen={doctorOpen}
+            setDoctorOpen={setDoctorOpen}
+          />
+
+          {presenting && liveSpec && (
+            <div className="fixed inset-0 z-[70]">
+              <FullscreenPlayer spec={liveSpec} onExit={() => setPresenting(false)} />
+            </div>
           )}
         </DeckThemeProvider>
       )}

@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -30,10 +31,13 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     }
   }, [open, handleKeyDown])
 
-  return (
+  // Portal to document.body: modals opened from inside the slide canvas
+  // would otherwise be trapped in transformed stacking contexts and render
+  // BEHIND the slide.
+  return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -69,6 +73,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }

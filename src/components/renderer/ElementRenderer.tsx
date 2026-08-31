@@ -30,6 +30,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
   const activeSlideActive = useContext(SlideActiveContext)
   // Fresh signed URL when the image references a file_id (URLs expire).
   const resolvedSrc = useResolvedImageSrc(el)
+
   const slideIndex = useActiveSlideIndex()
   const isEditing = editorCtx?.editing === true && (el.type === 'title' || el.type === 'subtitle' || el.type === 'paragraph')
   const [imagePickerOpen, setImagePickerOpen] = useState(false)
@@ -38,6 +39,22 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
   // real array index is needed for selection + updateElement.
   const realIndex =
     editorCtx?.spec?.slides[slideIndex]?.elements.indexOf(el) ?? index
+
+  // Click-to-select for STRUCTURED elements (free elements select via their
+  // own layer). Selection drives the editor toolbar (style, animation, ...).
+  const isSel =
+    editorCtx?.editing === true &&
+    editorCtx.selection?.slideIndex === slideIndex &&
+    editorCtx.selection?.elementIndex === realIndex
+  const selectionOutline = isSel ? { outline: `2px solid ${tokens.accent}`, outlineOffset: 2 } : {}
+  const selectProps = editorCtx?.editing
+    ? {
+        onClick: (e: React.MouseEvent) => {
+          e.stopPropagation()
+          editorCtx.setSelection({ slideIndex, elementIndex: realIndex })
+        },
+      }
+    : {}
 
   const isSelected =
     editorCtx?.editing === true &&
@@ -94,7 +111,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
             value={el.text ?? ''}
             onChange={handleTextChange}
             as={tag}
-            style={{ ...titleStyle, ...styleOverrides }}
+            style={{ ...titleStyle, ...styleOverrides, ...selectionOutline }}
           />
         )
       }
@@ -102,7 +119,8 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
         <h1
           key={key}
           {...animProps}
-          style={{ ...titleStyle, ...styleOverrides }}
+          {...selectProps}
+          style={{ ...titleStyle, ...styleOverrides, ...selectionOutline, cursor: 'pointer' }}
         >
           {el.text}
         </h1>
@@ -120,7 +138,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
           />
         )
       }
-      return <p key={key} {...animProps} style={{ ...style, ...subStyle, ...styleOverrides }}>{el.text}</p>
+      return <p key={key} {...animProps} {...selectProps} style={{ ...style, ...subStyle, ...styleOverrides, ...selectionOutline, cursor: 'pointer' }}>{el.text}</p>
     }
     case 'paragraph': {
       const paraStyle: CSSProperties = { fontSize: 'clamp(15px, 1.6vw, 20px)', lineHeight: 1.6, color: tokens.textMuted, maxWidth: '60ch' }
@@ -134,7 +152,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
           />
         )
       }
-      return <p key={key} {...animProps} style={{ ...style, ...paraStyle, ...styleOverrides }}>{el.text}</p>
+      return <p key={key} {...animProps} {...selectProps} style={{ ...style, ...paraStyle, ...styleOverrides, ...selectionOutline, cursor: 'pointer' }}>{el.text}</p>
     }
     case 'bullets':
       return (
@@ -232,7 +250,7 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     }
     case 'quote':
       return (
-        <blockquote key={key} {...animProps} style={{ ...style, borderLeft: `4px solid ${tokens.accent2}`, paddingLeft: '24px', fontStyle: 'italic', fontSize: 'clamp(20px, 2.6vw, 32px)', lineHeight: 1.4, ...styleOverrides }}>
+        <blockquote key={key} {...animProps} {...selectProps} style={{ ...style, borderLeft: `4px solid ${tokens.accent2}`, paddingLeft: '24px', fontStyle: 'italic', fontSize: 'clamp(20px, 2.6vw, 32px)', lineHeight: 1.4, ...styleOverrides, ...selectionOutline, cursor: 'pointer' }}>
           "{el.text}"
           {el.author && <footer style={{ marginTop: '14px', fontSize: '15px', color: tokens.textMuted, fontStyle: 'normal' }}>— {el.author}</footer>}
         </blockquote>

@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Maximize, Minimize, MonitorSpeaker, StickyNo
 import type { PresentationSpec } from '../../types'
 import SlideRenderer from './SlideRenderer'
 import { tokenFor } from './theme'
+import { useDeckTheme } from './DeckThemeContext'
+import { applyBrandKit, useBrandKit } from '../../context/BrandKitContext'
 import { getSettings } from '../../lib/settings'
 import { EASE_IN, EASE_OUT } from './animations'
 import { SlidePresentationContext } from './slideContext'
@@ -17,8 +19,11 @@ interface Props {
 // Base slide design size. The active slide is scaled dynamically so it always
 // COVERS the full viewport (no margins, no background bars visible) while
 // content scales proportionally, exactly like PowerPoint/Google Slides.
-const BASE_W = 1920
-const BASE_H = 1080
+// Design size of the fullscreen stage. 1280x720 (not 1920) keeps the
+// text/element proportions close to the medium editor view — on a 1080p
+// screen everything renders ~1.5x bigger instead of looking tiny.
+const BASE_W = 1280
+const BASE_H = 720
 
 // Theme-aware transition energy, now sourced from the theme tokens so the
 // renderer and the player share one source of truth:
@@ -340,7 +345,10 @@ export default function FullscreenPlayer({ spec, onExit }: Props) {
     else goNext()
   }
 
-  const tokens = tokenFor(spec.meta?.theme)
+  // Live deck theme (in-sync with ThemeSwitcher edits) + user brand kit.
+  const deck = useDeckTheme()
+  const { brand } = useBrandKit()
+  const tokens = applyBrandKit(deck?.tokens || tokenFor(spec.meta?.theme), brand)
   const energy: Energy = (tokens.energy as Energy) || 'dynamic'
   const progressPct = total ? ((index + 1) / total) * 100 : 0
 

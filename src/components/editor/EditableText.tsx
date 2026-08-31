@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect } from 'react'
 
 interface Props {
   value: string
@@ -8,58 +8,74 @@ interface Props {
   placeholder?: string
 }
 
-/** Escape user-controlled text before injecting via dangerouslySetInnerHTML. */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
 /**
- * Inline editable text element. Renders as the specified HTML tag with
- * contentEditable. Commits the value to the parent on blur (if changed).
- * Click-to-focus, Escape reverts, Enter confirms.
+ * Inline editable text element. Renders as the specified HTML tag.
+ *
+ * The editing state is UNCONTROLLED on purpose: the DOM text is only synced
+ * from props when the node is NOT being edited (undo, AI edits). While
+ * typing, changes stream out via onInput -> onChange without re-rendering
+ * this node, so the caret never jumps (previously the caret snapped to the
+ * start on every keystroke, which looked like right-to-left typing).
  */
 export default function EditableText({ value, onChange, as: Tag = 'p', style, placeholder = 'Click to edit' }: Props) {
-  const ref = useRef<HTMLElement>(null)
+  const nodeRef = useRef<HTMLElement | null>(null)
+  const setNode = (node: HTMLElement | null) => {
+    nodeRef.current = node
+  }
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
-  const focused = useRef(false)
 
+  // Keep the DOM text in sync when the value changes EXTERNALLY (undo, AI
+  // edits) — never while the user is typing in this very node.
   useEffect(() => {
-    setDraft(value)
-  }, [value])
+    const node = nodeRef.current
+    if (!node) return
+    if (editing) return
+    if (node.innerText !== (value || '')) node.innerText = value || ''
+  }, [value, editing])
 
-  const commit = useCallback(() => {
-    if (draft !== value) onChange(draft)
+  const commit = () => {
+    const node = nodeRef.current
+    if (!node) return
+    const next = node.innerText.replace(/\s+/g, ' ').trim()
+    if (next !== (value || '').trim()) onChange(next)
     setEditing(false)
-  }, [draft, value, onChange])
+  }
 
-  const revert = useCallback(() => {
-    setDraft(value)
+  const revert = () => {
+    const node = nodeRef.current
+    if (node) node.innerText = value || ''
     setEditing(false)
-  }, [value])
+  }
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault()
       revert()
     } else if (e.key === 'Enter' && (Tag === 'h1' || Tag === 'h2' || Tag === 'h3')) {
       e.preventDefault()
-      ref.current?.blur()
+      nodeRef.current?.blur()
     }
-  }, [revert])
+  }
+
+  const focusCaretAtEnd = () => {
+    const node = nodeRef.current
+    if (!node) return
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    range.collapse(false)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  }
 
   if (!editing) {
     return (
       <Tag
-        ref={ref as React.RefObject<any>}
+        ref={setNode}
+        dir="ltr"
         style={{ ...style, cursor: 'text', outline: 'none', minHeight: '1em' }}
         title="Double-click to edit"
-        onDoubleClick={() => { setEditing(true); setDraft(value) }}
+        onDoubleClick={() => setEditing(true)}
       >
         {value || <span style={{ color: 'inherit', opacity: 0.3 }}>{placeholder}</span>}
       </Tag>
@@ -68,15 +84,16 @@ export default function EditableText({ value, onChange, as: Tag = 'p', style, pl
 
   return (
     <Tag
-      ref={ref as React.RefObject<any>}
+      ref={setNode}
+      dir="ltr"
       contentEditable
       suppressContentEditableWarning
+      autoFocus
       style={{ ...style, outline: 'none', cursor: 'text', minHeight: '1em' }}
-      dangerouslySetInnerHTML={{ __html: escapeHtml(draft) }}
-      onFocus={() => { focused.current = true }}
-      onBlur={() => { focused.current = false; commit() }}
+      onFocus={focusCaretAtEnd}
+      onBlur={commit}
       onKeyDown={handleKeyDown}
-      onInput={(e) => setDraft((e.target as HTMLElement).innerText || '')}
+      onInput={e => onChange((e.target as HTMLElement).innerText || '')}
     />
   )
 }

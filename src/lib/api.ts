@@ -314,7 +314,12 @@ export const specApi = {
    * was loaded with — the backend answers 409 if the deck changed since.
    * The fresh updated_at comes back in the X-Updated-At header.
    */
-  async update(id: string, spec: PresentationSpec, expectedUpdatedAt?: string | null): Promise<{ spec: PresentationSpec; updatedAt: string | null }> {
+  async update(
+    id: string,
+    spec: PresentationSpec,
+    expectedUpdatedAt?: string | null,
+    options?: { keepalive?: boolean },
+  ): Promise<{ spec: PresentationSpec; updatedAt: string | null }> {
     const authToken = getAccessToken();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
@@ -325,6 +330,7 @@ export const specApi = {
       method: "PUT",
       headers,
       body: JSON.stringify(spec),
+      keepalive: options?.keepalive ?? false,
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;

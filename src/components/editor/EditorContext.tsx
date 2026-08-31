@@ -55,7 +55,7 @@ interface EditorContextValue {
 
   // Clipboard
   copy: () => void
-  paste: () => void
+  paste: (targetSlideIndex?: number) => void
 
   // Selection
   setSelection: (sel: Selection | null) => void
@@ -135,9 +135,42 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
   const pidRef = useRef(presentationId)
   const onSpecChangeRef = useRef(onSpecChange)
   const seededRef = useRef(false)
+  // Mirrors for the unload-flush effect (avoids stale closures).
+  const specRef = useRef<PresentationSpec | null>(null)
+  const dirtyRef = useRef(false)
 
   // Keep the latest onSpecChange without re-triggering the seed effect.
   useEffect(() => { onSpecChangeRef.current = onSpecChange }, [onSpecChange])
+
+  // Mirror latest spec/dirty state for the unload-flush effect.
+  specRef.current = spec
+  dirtyRef.current = isDirty
+
+  // NEVER LOSE EDITS: flush pending changes when the tab is hidden, when the
+  // page is unloaded (keepalive fetch), and when the editor unmounts
+  // (navigating away / closing overlays).
+  useEffect(() => {
+    const flush = () => {
+      const current = specRef.current
+      if (!current || !pidRef.current || !dirtyRef.current) return
+      specApi.update(pidRef.current, current, updatedAtRef.current, { keepalive: true }).catch(() => {})
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    window.addEventListener('beforeunload', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      window.removeEventListener('beforeunload', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+      // Unmount (route change): flush whatever is still pending.
+      if (dirtyRef.current && pidRef.current && specRef.current) {
+        specApi.update(pidRef.current, specRef.current, updatedAtRef.current).catch(() => {})
+      }
+    }
+  }, [])
 
   // --- seed from initialSpec OR fetch on mount ---
 
@@ -359,11 +392,14 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
     }
   }, [selection, spec])
 
-  const paste = useCallback(() => {
-    if (!copiedElement || !selection || !spec) return
+  const paste = useCallback((targetSlideIndex?: number) => {
+    if (!copiedElement || !spec) return
+    const slideIndex = targetSlideIndex ?? selection?.slideIndex
+    if (slideIndex === undefined || slideIndex === null || !spec.slides[slideIndex]) return
     pushHistory(spec, 'paste element')
-    const elements = [...spec.slides[selection.slideIndex].elements, { ...copiedElement }]
-    setSpec(patchSlide(spec, selection.slideIndex, { elements }))
+    const elements = [...spec.slides[slideIndex].elements, { ...copiedElement }]
+    setSpec(patchSlide(spec, slideIndex, { elements }))
+    setSelection({ slideIndex, elementIndex: elements.length - 1 })
     bump()
     scheduleSave()
   }, [copiedElement, selection, spec, pushHistory, scheduleSave, bump])
@@ -430,12 +466,17 @@ export function useEditorShortcuts() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName
-      if (e.target instanceof HTMLElement && (tag === 'INPUT' || tag === 'TEXTAREA')) return
-      if ((e.target as HTMLElement).isContentEditable) return
+      const target = e.target as HTMLElement
+      const tag = target.tagName
+      // While typing (text fields, contentEditable), let the BROWSER handle
+      // copy/paste/delete — the element shortcuts must never interfere.
+      const typing = e.target instanceof HTMLElement && (target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA')
 
       const mod = e.ctrlKey || e.metaKey
       const updateElement = ctx.updateElement
+
+      // Element shortcuts only apply OUTSIDE text editing.
+      if (typing) return
       if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
         if (canUndo) undo()
@@ -445,6 +486,12 @@ export function useEditorShortcuts() {
       } else if (mod && e.key === 'c') {
         e.preventDefault()
         copy()
+      } else if (mod && e.key === 'x') {
+        e.preventDefault()
+        if (selection && selection.elementIndex !== null) {
+          copy()
+          deleteElement(selection.slideIndex, selection.elementIndex)
+        }
       } else if (mod && e.key === 'v') {
         e.preventDefault()
         paste()
