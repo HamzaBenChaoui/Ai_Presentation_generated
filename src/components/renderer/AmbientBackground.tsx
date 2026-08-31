@@ -1,6 +1,6 @@
 import { useReducedMotion } from 'framer-motion'
-import { useEffect, useRef } from 'react'
-import type { CSSProperties } from 'react'
+import { Component, useEffect, useRef } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import * as THREE from 'three'
 import type { AmbientSpec } from './theme'
 
@@ -32,6 +32,25 @@ const NOISE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 const gridTexture = (c: string): string =>
   `repeating-linear-gradient(0deg, ${hexToRgba(c, 0.7)} 0px, ${hexToRgba(c, 0.7)} 1px, transparent 1px, transparent 46px), ` +
   `repeating-linear-gradient(90deg, ${hexToRgba(c, 0.7)} 0px, ${hexToRgba(c, 0.7)} 1px, transparent 1px, transparent 46px)`
+
+/** Error boundary: the ambient layer is purely cosmetic — if anything in the
+ *  WebGL/CSS background throws (context lost, resize race, GPU hiccup) we
+ *  drop the layer instead of unmounting the whole app. */
+export class AmbientGuard extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch(err: Error) {
+    console.warn('[ambient] background disabled after error:', err?.message)
+  }
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
+}
 
 export default function AmbientBackground({ spec }: { spec: AmbientSpec }) {
   const prefersReduced = useReducedMotion()
@@ -220,7 +239,11 @@ function Particles({ spec, moving }: { spec: AmbientSpec; moving: boolean }) {
       if (!box || !box.width || !box.height) return
       camera.aspect = box.width / box.height
       camera.updateProjectionMatrix()
-      renderer.setSize(box.width, box.height)
+      try {
+        renderer.setSize(box.width, box.height)
+      } catch {
+        /* context lost mid-resize — the loop guard stops rendering */
+      }
     })
     observer.observe(host)
 
@@ -228,18 +251,32 @@ function Particles({ spec, moving }: { spec: AmbientSpec; moving: boolean }) {
     // to radians/second so all ambient layers feel consistent.
     const omega = (Math.PI * 2) / Math.max(spec.speed, 4)
     let raf = 0
-    const clock = new THREE.Clock()
+    const start = performance.now()
+    let failures = 0
 
     const frame = () => {
-      const t = clock.getElapsedTime()
-      points.rotation.y = t * omega * 0.6
-      points.rotation.x = Math.sin(t * omega * 0.25) * 0.12
-      points.position.y = Math.sin(t * omega * 0.5) * 0.35
-      renderer.render(scene, camera)
+      try {
+        const t = (performance.now() - start) / 1000
+        points.rotation.y = t * omega * 0.6
+        points.rotation.x = Math.sin(t * omega * 0.25) * 0.12
+        points.position.y = Math.sin(t * omega * 0.5) * 0.35
+        renderer.render(scene, camera)
+        failures = 0
+      } catch {
+        // WebGL context lost: stop quietly instead of throwing every frame.
+        failures += 1
+        if (failures > 3) return
+      }
       raf = requestAnimationFrame(frame)
     }
     if (moving) raf = requestAnimationFrame(frame)
     else renderer.render(scene, camera) // static single frame for reduced motion
+
+    // A lost context must not spam errors — stop this layer dead.
+    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault()
+      cancelAnimationFrame(raf)
+    })
 
     return () => {
       cancelAnimationFrame(raf)

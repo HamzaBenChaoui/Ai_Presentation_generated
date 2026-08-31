@@ -1,11 +1,11 @@
 import type { SlideSpec, CustomAnimationDef } from '../../types'
 import type { ReactElement } from 'react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { defaultTokens, tokenFor, type RenderTokens } from './theme'
 import * as Layouts from './Layouts'
 import type { LayoutProps } from './Layouts'
 import { SlideActiveContext } from './slideContext'
-import AmbientBackground from './AmbientBackground'
+import AmbientBackground, { AmbientGuard } from './AmbientBackground'
 import CustomCodeFrame from './CustomCodeFrame'
 import FreeElementLayer from './FreeElementLayer'
 import { CustomAnimationsProvider } from './CustomAnimationsContext'
@@ -53,40 +53,30 @@ export function slideLayout(name?: string): (p: LayoutProps) => ReactElement {
  * PowerPoint-style auto-fit: if the slide's flow content is taller than the
  * slide, scale it down (min 55%) so nothing is silently clipped.
  */
-function useAutoFitScale(): { ref: React.RefObject<HTMLDivElement | null>; style: React.CSSProperties } {
-  const ref = useRef<HTMLDivElement>(null)
+function useAutoFitScale(node: HTMLDivElement | null): number {
   const [scale, setScale] = useState(1)
 
   useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
+    if (!node) return
     const fit = () => {
-      const overflow = el.scrollHeight - el.clientHeight
-      if (overflow > 4) {
-        const s = Math.max(0.55, el.clientHeight / el.scrollHeight)
-        setScale(s)
-      } else {
+      // scrollHeight/clientHeight are transform-independent, so the
+      // measurement is stable even while scaled.
+      const overflow = node.scrollHeight - node.clientHeight
+      // Hysteresis: shrink on real overflow, restore with clear slack —
+      // prevents shrink/grow oscillation on borderline content.
+      if (overflow > 12) {
+        setScale(Math.max(0.55, node.clientHeight / node.scrollHeight))
+      } else if (scale !== 1) {
         setScale(1)
       }
     }
     fit()
     const ro = new ResizeObserver(fit)
-    ro.observe(el)
+    ro.observe(node)
     return () => ro.disconnect()
-  }, [])
+  }, [node, scale])
 
-  return {
-    ref,
-    style: {
-      flex: 1,
-      minHeight: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      transform: scale < 1 ? `scale(${scale})` : undefined,
-      transformOrigin: 'top left',
-      width: scale < 1 ? `${100 / scale}%` : undefined,
-    },
-  }
+  return scale
 }
 
 interface Props {
@@ -112,6 +102,9 @@ interface Props {
 // Renders a single slide. The renderer auto-selects the layout from the
 // spec and applies the slide-level background / theme. 16:9, responsive.
 export default function SlideRenderer({ slide, themeName, background, tokens = defaultTokens, customAnimations, active = true, presentation = false, nonInteractive = false }: Props) {
+  // Hook called unconditionally at the top (before any early return).
+  const [stageNode, setStageNode] = useState<HTMLDivElement | null>(null)
+  const fitScale = useAutoFitScale(stageNode)
   const tk = tokens || tokenFor(themeName)
   const bg = background || slide.background || undefined
 
@@ -137,7 +130,6 @@ export default function SlideRenderer({ slide, themeName, background, tokens = d
   }
 
   const Layout = slideLayout(slide.layout)
-  const { ref: fitRef, style: fitStyle } = useAutoFitScale()
   // Image backgrounds already fill the slide — the ambient layer would sit on
   // top of the photo, so skip it for url()/data: backgrounds.
   const isImageBg = bg ? /url\(|^data:/i.test(bg) : false
@@ -161,8 +153,25 @@ export default function SlideRenderer({ slide, themeName, background, tokens = d
           flexDirection: 'column',
         }}
       >
-        {!isImageBg && !nonInteractive && <AmbientBackground spec={tk.ambient} />}
-        <div ref={fitRef} style={{ ...fitStyle, position: 'relative', zIndex: 1 }}>
+        {!isImageBg && !nonInteractive && (
+          <AmbientGuard>
+            <AmbientBackground spec={tk.ambient} />
+          </AmbientGuard>
+        )}
+        <div
+          ref={setStageNode}
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
+            transformOrigin: 'top left',
+            width: fitScale < 1 ? `${100 / fitScale}%` : undefined,
+          }}
+        >
           <Layout slide={slide} tokens={tk} active={active} />
         </div>
         {/* Free-positioned (Canvas-style) elements float above the layout. */}
