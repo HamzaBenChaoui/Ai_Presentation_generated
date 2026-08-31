@@ -49,7 +49,9 @@ interface ClientSetup {
   notes?: string[]
 }
 
-function buildSetups(url: string, token: string): Record<ClientKey, ClientSetup> {
+function buildSetups(url: string): Record<ClientKey, ClientSetup> {
+  // SECURITY: configs never embed the real token — they reference the
+  // SLIDE_AI_TOKEN placeholder that the user swaps with the copy button.
   return {
     // ZKR first — same protocol/config as Claude Code, the CLI just starts
     // with `zkr` instead of `claude`.
@@ -106,13 +108,15 @@ function buildSetups(url: string, token: string): Record<ClientKey, ClientSetup>
       config: JSON.stringify(
         {
           mcpServers: {
-            'slide-ai': { url, headers: { Authorization: `Bearer ${token}` } },
+            'slide-ai': { url, headers: { Authorization: 'Bearer SLIDE_AI_TOKEN' } },
           },
         },
         null,
         2,
       ),
-      notes: ['Après avoir sauvegardé, ouvre Cursor Settings → MCP → clique "Refresh" pour voir les outils.'],
+      notes: [
+        'Remplace SLIDE_AI_TOKEN par ton token (bouton copier ci-dessus), puis Cursor Settings → MCP → "Refresh" pour voir les outils.',
+      ],
     },
     opencode: {
       key: 'opencode',
@@ -123,12 +127,13 @@ function buildSetups(url: string, token: string): Record<ClientKey, ClientSetup>
         {
           $schema: 'https://opencode.ai/config.json',
           mcp: {
-            'slide-ai': { type: 'remote', url, headers: { Authorization: `Bearer ${token}` }, enabled: true },
+            'slide-ai': { type: 'remote', url, headers: { Authorization: 'Bearer SLIDE_AI_TOKEN' }, enabled: true },
           },
         },
         null,
         2,
       ),
+      notes: ['Remplace SLIDE_AI_TOKEN par ton token (bouton copier ci-dessus).'],
     },
     codex: {
       key: 'codex',
@@ -139,7 +144,7 @@ function buildSetups(url: string, token: string): Record<ClientKey, ClientSetup>
 url = "${url}"
 bearer_token_env_var = "SLIDE_AI_TOKEN"`,
       notes: [
-        'Exporte le token avant de lancer Codex :  export SLIDE_AI_TOKEN="' + token + '"',
+        'Aucun token dans le fichier : Codex lit la variable d’environnement. Exemple :  export SLIDE_AI_TOKEN="<colle ton token MCP ici>"',
         'La connexion HTTP streamable nécessite une version récente de Codex CLI.',
       ],
     },
@@ -148,19 +153,20 @@ bearer_token_env_var = "SLIDE_AI_TOKEN"`,
       label: 'ZCode',
       file: '.mcp.json  (racine du projet)',
       cli: {
-        label: 'Ou en une commande :',
-        command: `zcode mcp add slide-ai --transport http ${url} --header "Authorization: Bearer ${token}"`,
+        label: 'Ou en une commande (sans token) :',
+        command: `zcode mcp add slide-ai --transport http ${url}`,
       },
       format: 'json',
       config: JSON.stringify(
         {
           mcpServers: {
-            'slide-ai': { type: 'http', url, headers: { Authorization: `Bearer ${token}` } },
+            'slide-ai': { type: 'http', url, headers: { Authorization: 'Bearer SLIDE_AI_TOKEN' } },
           },
         },
         null,
         2,
       ),
+      notes: ['Remplace SLIDE_AI_TOKEN dans le JSON par ton token (bouton copier ci-dessus).'],
     },
   }
 }
@@ -217,6 +223,7 @@ export default function McpPage() {
   const [token, setToken] = useState(storedToken)
   const [tab, setTab] = useState<ClientKey>('zkr')
   const [minting, setMinting] = useState(false)
+  const [tokenCopied, setTokenCopied] = useState(false)
   const [mintError, setMintError] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   // Device flow (one-click connect)
@@ -245,7 +252,7 @@ export default function McpPage() {
 
 
 
-  const setups = useMemo(() => buildSetups(baseUrl.trim(), token.trim() || '<VOTRE_TOKEN>'), [baseUrl, token])
+  const setups = useMemo(() => buildSetups(baseUrl.trim()), [baseUrl])
   const active = setups[tab]
 
   return (
@@ -380,6 +387,21 @@ export default function McpPage() {
                     placeholder="Colle ton access token"
                     className="block w-full h-10 rounded-xl border border-border bg-bg pl-9 pr-9 py-2 text-sm text-text placeholder:text-text-dim focus:outline-none focus:ring-2 focus:ring-accent"
                   />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(token)
+                        setTokenCopied(true)
+                        setTimeout(() => setTokenCopied(false), 1600)
+                      } catch { /* clipboard unavailable */ }
+                    }}
+                    disabled={!token}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 text-text-dim hover:text-accent cursor-pointer disabled:opacity-30"
+                    title="Copier le token"
+                  >
+                    {tokenCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowToken((v) => !v)}
