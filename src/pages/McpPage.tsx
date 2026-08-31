@@ -199,10 +199,7 @@ function Snippet({ code, fileName, format }: { code: string; fileName?: string; 
         </span>
         <CopyButton text={code} />
       </div>
-      <pre className={cn(
-        'px-3 py-2.5 text-[12px] leading-relaxed overflow-x-auto text-text',
-        format === 'bash' && 'text-emerald-300/90',
-      )}>
+      <pre className="px-3 py-2.5 text-[12px] leading-relaxed overflow-x-auto text-text">
         <code>{code}</code>
       </pre>
     </div>
