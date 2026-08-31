@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Cable, Check, Copy, Eye, EyeOff, KeyRound, Link2, RefreshCw, ShieldAlert, Sparkles,
@@ -108,14 +108,14 @@ function buildSetups(url: string): Record<ClientKey, ClientSetup> {
       config: JSON.stringify(
         {
           mcpServers: {
-            'slide-ai': { url, headers: { Authorization: 'Bearer SLIDE_AI_TOKEN' } },
+            'slide-ai': { url, headers: { Authorization: 'Bearer <TON_TOKEN>' } },
           },
         },
         null,
         2,
       ),
       notes: [
-        'Remplace SLIDE_AI_TOKEN par ton token (bouton copier ci-dessus), puis Cursor Settings → MCP → "Refresh" pour voir les outils.',
+        'Remplace <TON_TOKEN> par ton token (bouton copier à droite du champ), puis Cursor Settings → MCP → "Refresh".',
       ],
     },
     opencode: {
@@ -127,13 +127,13 @@ function buildSetups(url: string): Record<ClientKey, ClientSetup> {
         {
           $schema: 'https://opencode.ai/config.json',
           mcp: {
-            'slide-ai': { type: 'remote', url, headers: { Authorization: 'Bearer SLIDE_AI_TOKEN' }, enabled: true },
+            'slide-ai': { type: 'remote', url, headers: { Authorization: 'Bearer <TON_TOKEN>' }, enabled: true },
           },
         },
         null,
         2,
       ),
-      notes: ['Remplace SLIDE_AI_TOKEN par ton token (bouton copier ci-dessus).'],
+      notes: ['Remplace <TON_TOKEN> par ton token (bouton copier à droite du champ).'],
     },
     codex: {
       key: 'codex',
@@ -160,13 +160,13 @@ bearer_token_env_var = "SLIDE_AI_TOKEN"`,
       config: JSON.stringify(
         {
           mcpServers: {
-            'slide-ai': { type: 'http', url, headers: { Authorization: 'Bearer SLIDE_AI_TOKEN' } },
+            'slide-ai': { type: 'http', url, headers: { Authorization: 'Bearer <TON_TOKEN>' } },
           },
         },
         null,
         2,
       ),
-      notes: ['Remplace SLIDE_AI_TOKEN dans le JSON par ton token (bouton copier ci-dessus).'],
+      notes: ['Remplace <TON_TOKEN> dans le JSON par ton token (bouton copier à droite du champ).'],
     },
   }
 }
@@ -196,7 +196,7 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-function Snippet({ code, fileName, format }: { code: string; fileName?: string; format: 'json' | 'toml' | 'bash' }) {
+function Snippet({ code, fileName, format, highlight }: { code: string; fileName?: string; format: 'json' | 'toml' | 'bash'; highlight?: string }) {
   return (
     <div className="rounded-xl border border-border bg-surface2/50 overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-bg/40">
@@ -206,7 +206,20 @@ function Snippet({ code, fileName, format }: { code: string; fileName?: string; 
         <CopyButton text={code} />
       </div>
       <pre className="px-3 py-2.5 text-[12px] leading-relaxed overflow-x-auto text-text">
-        <code>{code}</code>
+        <code>
+          {highlight && code.includes(highlight)
+            ? code.split(highlight).map((part, i, arr) => (
+                <Fragment key={i}>
+                  {part}
+                  {i < arr.length - 1 && (
+                    <span className="rounded bg-amber-400/25 px-1 font-bold text-amber-700 ring-1 ring-amber-500/50">
+                      {highlight}
+                    </span>
+                  )}
+                </Fragment>
+              ))
+            : code}
+        </code>
       </pre>
     </div>
   )
@@ -456,7 +469,12 @@ export default function McpPage() {
             <p className="text-xs text-text-muted">
               Ajoute ce serveur dans <span className="font-semibold text-text">{active.file}</span> :
             </p>
-            <Snippet code={active.config} fileName={active.file} format={active.format} />
+            <Snippet
+              code={active.config}
+              fileName={active.file}
+              format={active.format}
+              highlight="<TON_TOKEN>"
+            />
             {active.cli && (
               <>
                 <p className="text-xs text-text-muted pt-1">{active.cli.label}</p>
