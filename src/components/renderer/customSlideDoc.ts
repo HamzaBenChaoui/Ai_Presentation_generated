@@ -54,6 +54,10 @@ export function buildCustomSlideDoc(
 <html>
 <head>
 <meta charset="utf-8">
+<!-- Sandbox policy: inline scripts/styles only, no network (fonts/images must
+     be inline data:). Prevents font-parse (OTS) errors from external URLs. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src data:; worker-src blob:;">
 <style>
   :root { ${cssVarBlock(tokens)} }
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden;
@@ -96,7 +100,16 @@ ${libScripts}
 <script>
 try {
 ${js}
-} catch (err) { console.error('[custom slide]', err); }
+} catch (err) {
+  var msg = err && err.message ? err.message : String(err);
+  var hint = '';
+  if (msg.indexOf('getContext') !== -1) {
+    hint = ' Hint: grab the canvas with document.querySelector("canvas") (a single <canvas> element) and check it is not null before calling getContext.';
+  } else if (msg.indexOf('null') !== -1) {
+    hint = ' Hint: an element id did not match — check your HTML ids.';
+  }
+  console.error('[custom slide] ' + msg + '.' + hint);
+}
 </script>
 </body>
 </html>`
