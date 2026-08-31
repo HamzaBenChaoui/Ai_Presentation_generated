@@ -103,8 +103,20 @@ export const router = createBrowserRouter([
           { path: 'workspaces/:id', element: <WorkspaceDetailPage /> },
           { path: 'settings', element: <SettingsPage /> },
           { path: 'mcp', element: <McpPage /> },
-          { path: 'oauth/authorize', element: <OAuthAuthorizePage /> },
-          { path: 'oauth/device', element: <OAuthAuthorizePage /> },
+        ],
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          {
+            // OAuth / device consent: full-bleed dark page OUTSIDE the app
+            // shell (the CLI opens it in a browser — no chrome, no padding).
+            element: <FullscreenShell />,
+            children: [
+              { path: 'oauth/authorize', element: <OAuthAuthorizePage /> },
+              { path: 'oauth/device', element: <OAuthAuthorizePage /> },
+            ],
+          },
         ],
       },
       {
