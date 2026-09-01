@@ -279,6 +279,9 @@ export default function FreeElementLayer({ slide, tokens = defaultTokens, active
               left: `${clampPos(x + (dragging ? drag!.dx : 0))}%`,
               top: `${clampPos(y + (dragging ? drag!.dy : 0))}%`,
               width: w != null ? `${w}%` : undefined,
+              // Elements that declare a height (charts, shapes, media) get a
+              // real box so percentage-height children can fill them.
+              height: el.h != null ? `${el.h}%` : undefined,
               maxWidth: w != null ? undefined : '90%',
               pointerEvents: editing ? 'auto' : 'none',
               outline: isSelected ? `2px solid ${tokens.accent}` : undefined,

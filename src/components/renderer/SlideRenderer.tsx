@@ -1,6 +1,6 @@
 import type { SlideSpec, CustomAnimationDef } from '../../types'
 import type { ReactElement } from 'react'
-import { useLayoutEffect, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { defaultTokens, tokenFor, type RenderTokens } from './theme'
 import * as Layouts from './Layouts'
 import type { LayoutProps } from './Layouts'
@@ -55,26 +55,44 @@ export function slideLayout(name?: string): (p: LayoutProps) => ReactElement {
  */
 function useAutoFitScale(node: HTMLDivElement | null): number {
   const [scale, setScale] = useState(1)
+  const rafRef = useRef(0)
 
+  // NOTE: the effect depends ONLY on the node — never on `scale`. Measuring
+  // inside a scale-dependent effect re-ran fit() synchronously on every state
+  // update, and animating content (charts) made the measurement jitter enough
+  // to exceed React's nested-update limit ("Maximum update depth exceeded",
+  // a.k.a. the theme-picker zoom glitch). ResizeObserver callbacks are
+  // coalesced into rAF so at most one fit runs per frame.
   useLayoutEffect(() => {
     if (!node) return
     const fit = () => {
       // scrollHeight/clientHeight are transform-independent, so the
       // measurement is stable even while scaled.
       const overflow = node.scrollHeight - node.clientHeight
-      // Hysteresis: shrink on real overflow, restore with clear slack —
-      // prevents shrink/grow oscillation on borderline content.
-      if (overflow > 12) {
-        setScale(Math.max(0.55, node.clientHeight / node.scrollHeight))
-      } else if (scale !== 1) {
-        setScale(1)
-      }
+      setScale((cur) => {
+        let next = cur
+        if (overflow > 12) {
+          next = Math.max(0.55, (node.clientHeight - 12) / node.scrollHeight)
+        } else if (overflow <= 0) {
+          // Restore only once the content actually fits again (not merely
+          // within the slack band) so shrink/restore can never oscillate.
+          next = 1
+        }
+        // Epsilon bail: animating charts jitter the ratio by tiny amounts.
+        return Math.abs(cur - next) < 0.01 ? cur : next
+      })
     }
     fit()
-    const ro = new ResizeObserver(fit)
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(fit)
+    })
     ro.observe(node)
-    return () => ro.disconnect()
-  }, [node, scale])
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(rafRef.current)
+    }
+  }, [node])
 
   return scale
 }

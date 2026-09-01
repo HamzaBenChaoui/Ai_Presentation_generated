@@ -149,14 +149,18 @@ export default function AnalyticsPage() {
             <>
               <div className="flex items-end gap-1.5 h-40">
                 {slideTimes.map(({ slide, avg }) => (
-                  <div key={slide} className="flex-1 flex flex-col items-center gap-1 min-w-[14px]">
-                    <span className="text-[9px] text-text-dim tabular-nums">{Math.round(avg)}s</span>
+                  <div key={slide} className="flex-1 h-full flex flex-col items-center gap-1 min-w-[14px]">
+                    <span className="text-[9px] text-text-dim tabular-nums shrink-0">{Math.round(avg)}s</span>
                     <div
                       title={`Slide ${slide + 1}: ${Math.round(avg)}s average`}
-                      className="w-full rounded-t-md bg-gradient-to-t from-accent/40 to-accent"
-                      style={{ height: `${Math.max(4, (avg / maxAvg) * 100)}%` }}
-                    />
-                    <span className="text-[9px] text-text-dim tabular-nums">{slide + 1}</span>
+                      className="w-full flex-1 flex items-end"
+                    >
+                      <div
+                        className="w-full rounded-t-md bg-gradient-to-t from-accent/40 to-accent"
+                        style={{ height: `${Math.max(4, (avg / maxAvg) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] text-text-dim tabular-nums shrink-0">{slide + 1}</span>
                   </div>
                 ))}
               </div>
