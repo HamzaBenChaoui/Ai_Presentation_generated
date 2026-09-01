@@ -15,6 +15,11 @@ interface HistoryEntry {
 export interface Selection {
   slideIndex: number
   elementIndex: number | null
+  /**
+   * Additional selected element indexes on the SAME slide (shift-click multi
+   * select). The primary elementIndex stays the "anchor" the toolbar edits.
+   */
+  extraIndexes?: number[] | null
 }
 
 // --- context shape -------------------------------------------------------
@@ -59,6 +64,12 @@ interface EditorContextValue {
 
   // Selection
   setSelection: (sel: Selection | null) => void
+  /** Shift-click: add/remove an element from the multi-selection. */
+  toggleMultiSelect: (slideIndex: number, elementIndex: number) => void
+  /** All selected indexes on the selection's slide (primary first). */
+  selectedIndexes: number[]
+  /** Delete every selected element (locked ones are skipped). */
+  deleteSelection: () => void
 
   // AI edit
   applyAiEdit: (newSpec: PresentationSpec) => void
@@ -289,6 +300,8 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
 
   const deleteElement = useCallback((slideIndex: number, elementIndex: number) => {
     if (!spec) return
+    // Locked elements are protected — unlock first.
+    if (spec.slides[slideIndex]?.elements[elementIndex]?.locked) return
     pushHistory(spec, `delete element ${elementIndex} from slide ${slideIndex}`)
     const elements = spec.slides[slideIndex].elements.filter((_, i) => i !== elementIndex)
     setSpec(patchSlide(spec, slideIndex, { elements }))
@@ -404,7 +417,51 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
     scheduleSave()
   }, [copiedElement, selection, spec, pushHistory, scheduleSave, bump])
 
-  const setSelection = useCallback((sel: Selection | null) => setSelectionState(sel), [])
+  const setSelection = useCallback((sel: Selection | null) => {
+    // A plain (non-shift) selection reset clears the multi-select too.
+    setSelectionState(sel ? { ...sel, extraIndexes: sel.extraIndexes ?? null } : null)
+  }, [])
+
+  const toggleMultiSelect = useCallback((slideIndex: number, elementIndex: number) => {
+    setSelectionState((cur) => {
+      if (!cur || cur.slideIndex !== slideIndex) {
+        return { slideIndex, elementIndex, extraIndexes: null }
+      }
+      // One flat set (primary + extras); the first member becomes the anchor.
+      const all = new Set<number>([
+        ...(cur.extraIndexes ?? []),
+        ...(cur.elementIndex != null ? [cur.elementIndex] : []),
+      ])
+      if (all.has(elementIndex)) all.delete(elementIndex)
+      else all.add(elementIndex)
+      const list = [...all]
+      const primary = list.length ? list[0] : null
+      return { slideIndex, elementIndex: primary, extraIndexes: list.length > 1 ? list.slice(1) : null }
+    })
+    bump()
+  }, [bump])
+
+  const selectedIndexes = (() => {
+    if (!selection || selection.elementIndex == null) return []
+    return [selection.elementIndex, ...(selection.extraIndexes ?? []).filter((i) => i !== selection.elementIndex)]
+  })()
+
+  const deleteSelection = useCallback(() => {
+    if (!spec || !selection || selection.slideIndex < 0 || !spec.slides[selection.slideIndex]) return
+    const slideIndex = selection.slideIndex
+    const idxs = [selection.elementIndex, ...(selection.extraIndexes ?? [])].filter(
+      (i): i is number => i != null,
+    )
+    const locked = idxs.filter((i) => spec.slides[slideIndex]?.elements[i]?.locked)
+    const removable = [...new Set(idxs)].filter((i) => !locked.includes(i))
+    if (!removable.length) return
+    pushHistory(spec, `delete ${removable.length} element(s)`)
+    const elements = spec.slides[slideIndex].elements.filter((_, i) => !removable.includes(i))
+    setSpec(patchSlide(spec, slideIndex, { elements }))
+    setSelectionState(null)
+    bump()
+    scheduleSave()
+  }, [spec, selection, pushHistory, scheduleSave, bump])
 
   // --- load ---
 
@@ -452,6 +509,7 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
     updateElement, updateSlide, addElement, deleteElement, duplicateElement,
     deleteSlide, duplicateSlide, addSlide, updateElementText,
     undo, redo, copy, paste, setSelection, applyAiEdit,
+    toggleMultiSelect, selectedIndexes, deleteSelection,
     load, forceSave, conflict, overwriteConflictSave,
   }
 
@@ -462,7 +520,7 @@ export function useEditorShortcuts() {
   const ctx = useContext(EditorContext)
   if (!ctx) return
 
-  const { selection, canUndo, canRedo, undo, redo, copy, paste, deleteElement, duplicateElement } = ctx
+  const { selection, canUndo, canRedo, undo, redo, copy, paste, deleteSelection, duplicateElement } = ctx
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -490,7 +548,7 @@ export function useEditorShortcuts() {
         e.preventDefault()
         if (selection && selection.elementIndex !== null) {
           copy()
-          deleteElement(selection.slideIndex, selection.elementIndex)
+          deleteSelection()
         }
       } else if (mod && e.key === 'v') {
         e.preventDefault()
@@ -501,8 +559,11 @@ export function useEditorShortcuts() {
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selection && selection.elementIndex !== null) {
           e.preventDefault()
-          deleteElement(selection.slideIndex, selection.elementIndex)
+          deleteSelection()
         }
+      } else if (mod && e.key === 'k') {
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('slideai:command-palette'))
       } else if (e.key.startsWith('Arrow') && selection && selection.elementIndex !== null) {
         // Canvas-style nudging: arrows move the selected free element by
         // 0.5%, Shift+arrows by 3%.
@@ -521,5 +582,5 @@ export function useEditorShortcuts() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [canUndo, canRedo, undo, redo, copy, paste, selection, deleteElement, duplicateElement])
+  }, [canUndo, canRedo, undo, redo, copy, paste, selection, deleteSelection, duplicateElement])
 }

@@ -2,6 +2,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   forwardRef,
   useImperativeHandle,
@@ -16,6 +17,7 @@ import {
   Share2,
   Sparkles,
   Stethoscope,
+  Languages,
 } from 'lucide-react'
 import { specApi, exportApi, presentationsApi, ApiClientError, type ExportFormat } from '../lib/api'
 import type { PresentationSpec } from '../types'
@@ -28,6 +30,9 @@ import { useEditorShortcuts } from '../components/editor/useEditorShortcuts'
 import QuickAiEditModal from '../components/editor/QuickAiEditModal'
 import DeckDoctorModal from '../components/editor/DeckDoctorModal'
 import CanvasToolbar from '../components/editor/CanvasToolbar'
+import TranslateModal from '../components/editor/TranslateModal'
+import EditorContextMenu from '../components/editor/EditorContextMenu'
+import CommandPalette, { type Command } from '../components/editor/CommandPalette'
 import MotionPanel from '../components/editor/MotionPanel'
 import SmartAiMenu from '../components/editor/SmartAiMenu'
 import AiEditorPanel from '../components/ai/AiEditorPanel'
@@ -240,13 +245,17 @@ interface EditorBodyProps {
   setAiEditOpen: (open: boolean) => void
   doctorOpen: boolean
   setDoctorOpen: (open: boolean) => void
+  translateOpen: boolean
+  setTranslateOpen: (open: boolean) => void
+  onPresent: () => void
+  onExport: (fmt: 'html' | 'pdf' | 'pptx') => void
 }
 
 /** Outer wrapper: owns the EditorProvider. ALL editor content lives inside. */
 function EditorBody({
   presentationId, initialSpec, initialUpdatedAt, index, setIndex, inspectorTab, setInspectorTab,
   onSpecChange, onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
-  doctorOpen, setDoctorOpen,
+  doctorOpen, setDoctorOpen, translateOpen, setTranslateOpen, onPresent, onExport,
 }: EditorBodyProps) {
   return (
     <EditorProvider
@@ -268,6 +277,10 @@ function EditorBody({
         setAiEditOpen={setAiEditOpen}
         doctorOpen={doctorOpen}
         setDoctorOpen={setDoctorOpen}
+        translateOpen={translateOpen}
+        setTranslateOpen={setTranslateOpen}
+        onPresent={onPresent}
+        onExport={onExport}
       />
     </EditorProvider>
   )
@@ -286,12 +299,17 @@ interface EditorBodyInnerProps {
   setAiEditOpen: (open: boolean) => void
   doctorOpen: boolean
   setDoctorOpen: (open: boolean) => void
+  translateOpen: boolean
+  setTranslateOpen: (open: boolean) => void
+  onPresent: () => void
+  onExport: (fmt: 'html' | 'pdf' | 'pptx') => void
 }
 
 function EditorBodyInner({
   presentationId, index, setIndex, inspectorTab, setInspectorTab,
   onCloseAi, bridgeRef, onToolbarState, aiEditOpen, setAiEditOpen,
-  doctorOpen, setDoctorOpen,
+  doctorOpen, setDoctorOpen, translateOpen, setTranslateOpen,
+  onPresent, onExport,
 }: EditorBodyInnerProps) {
   const [inspectorWidth, setInspectorWidth] = useState(readInspectorWidth)
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -300,6 +318,20 @@ function EditorBodyInner({
   const { spec: navSpec, addSlide } = useEditor()
   const navSlides = navSpec?.slides ?? []
   const [replayKey, setReplayKey] = useState(0)
+
+  // Ctrl+K palette: editor-native actions + page-level actions passed down.
+  const paletteCommands: Command[] = useMemo(() => [
+    { id: 'present', label: 'Present deck', hint: 'Play mode', run: onPresent },
+    { id: 'export-html', label: 'Export as HTML', run: () => onExport('html') },
+    { id: 'export-pdf', label: 'Export as PDF', run: () => onExport('pdf') },
+    { id: 'export-pptx', label: 'Export as PowerPoint', run: () => onExport('pptx') },
+    { id: 'ai-edit', label: 'Quick AI edit…', run: () => setAiEditOpen(true) },
+    { id: 'doctor', label: 'Run Deck Doctor', run: () => setDoctorOpen(true) },
+    { id: 'translate', label: 'Translate deck…', run: () => setTranslateOpen(true) },
+    { id: 'add-slide', label: 'Add blank slide', run: () => setIndex(addSlide('blank')) },
+    { id: 'undo', label: 'Undo', hint: 'Ctrl+Z', run: () => bridgeRef.current?.undo() },
+    { id: 'redo', label: 'Redo', hint: 'Ctrl+Shift+Z', run: () => bridgeRef.current?.redo() },
+  ], [onPresent, onExport, addSlide, setIndex, bridgeRef])
 
   // Persist the chosen width so it survives reloads.
   useEffect(() => {
@@ -458,6 +490,16 @@ function EditorBodyInner({
         onClose={() => setAiEditOpen(false)}
       />
 
+      <TranslateModal
+        presentationId={presentationId}
+        open={translateOpen}
+        onClose={() => setTranslateOpen(false)}
+      />
+
+      <EditorContextMenu slideIndex={index} />
+
+      <CommandPalette commands={paletteCommands} />
+
       <DeckDoctorModal
         presentationId={presentationId}
         open={doctorOpen}
@@ -488,6 +530,7 @@ export default function EditorPage() {
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('ai')
   const [aiEditOpen, setAiEditOpen] = useState(false)
   const [doctorOpen, setDoctorOpen] = useState(false)
+  const [translateOpen, setTranslateOpen] = useState(false)
   const [accessRole, setAccessRole] = useState<string | null>(null)
 
   // Proactive Deck Doctor: decks created by AI generation open with a scan.
@@ -733,6 +776,17 @@ export default function EditorPage() {
                 <Stethoscope size={14} />
                 <span className="hidden md:inline">Doctor</span>
               </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Translate every text of the deck"
+                className="rounded-xl text-text-muted hover:text-accent hover:bg-accent/10"
+                onClick={() => setTranslateOpen(true)}
+              >
+                <Languages size={14} />
+                <span className="hidden md:inline">Translate</span>
+              </Button>
             </>
           )}
 
@@ -812,7 +866,7 @@ export default function EditorPage() {
       )}
 
       {!loading && !error && initialSpec && (
-        <DeckThemeProvider initial={initialSpec.meta?.theme as ThemeName | null}>
+        <DeckThemeProvider initial={initialSpec.meta?.theme as ThemeName | null} tokenOverrides={initialSpec.meta?.themeTokens ?? null}>
           {/* EditorBody ALWAYS stays mounted: exiting present mode (or a
               reload mid-edit) must never wipe editor state or pending saves.
               The player renders as a full-screen overlay above it. */}
@@ -832,6 +886,13 @@ export default function EditorPage() {
             setAiEditOpen={setAiEditOpen}
             doctorOpen={doctorOpen}
             setDoctorOpen={setDoctorOpen}
+            translateOpen={translateOpen}
+            setTranslateOpen={setTranslateOpen}
+            onPresent={() => {
+              editorBridgeRef.current?.forceSave()
+              setPresenting(true)
+            }}
+            onExport={handleExport}
           />
 
           {presenting && liveSpec && (

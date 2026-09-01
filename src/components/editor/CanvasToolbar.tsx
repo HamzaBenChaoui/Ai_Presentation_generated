@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Heading1, Type, List, Quote, ImagePlus, Copy, Trash2, ArrowUpToLine, Wand2, AlignLeft, AlignCenter, AlignRight, Palette, Square, Circle, Minus, MoveRight, Video, Music, Table2 } from 'lucide-react'
+import { Heading1, Type, List, Quote, ImagePlus, Copy, Trash2, ArrowUpToLine, ArrowDownToLine, Lock, LockOpen, Wand2, AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal, Palette, Square, Circle, Minus, MoveRight, Video, Music, Table2, BarChart3 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useEditor } from './EditorContext'
 import ImagePickerModal from './ImagePickerModal'
@@ -39,7 +39,7 @@ function btnClass(active = false): string {
  */
 export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
   const editor = useEditor()
-  const { spec, selection, addElement, updateElement, duplicateElement, deleteElement, updateSlide } = editor
+  const { spec, selection, addElement, updateElement, duplicateElement, updateSlide } = editor
   const [imagePickerOpen, setImagePickerOpen] = useState(false)
   const [mediaPicker, setMediaPicker] = useState<'video' | 'audio' | null>(null)
   const [chartEditorOpen, setChartEditorOpen] = useState(false)
@@ -68,6 +68,41 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
   const customAnims = (spec.meta.customAnimations ?? [])
     .map((d) => d.name)
     .filter(Boolean)
+
+  // --- multi-select helpers --------------------------------------------------
+  const multiCount = editor.selectedIndexes.length
+
+  /** Align every selected free element (one undo entry). */
+  const alignSelected = (mode: 'left' | 'center-x' | 'right' | 'top' | 'middle' | 'bottom') => {
+    const idxs = editor.selectedIndexes.filter((i) => {
+      const el = slide.elements[i]
+      return el && el.x != null && el.y != null && !el.locked
+    })
+    if (idxs.length < 2) return
+    const boxes = idxs.map((i) => {
+      const el = slide.elements[i]
+      const w = el.w ?? 40
+      const h = el.h ?? 20
+      return { i, x: el.x ?? 0, y: el.y ?? 0, w, h }
+    })
+    const minX = Math.min(...boxes.map((b) => b.x))
+    const maxX = Math.max(...boxes.map((b) => b.x + b.w))
+    const minY = Math.min(...boxes.map((b) => b.y))
+    const maxY = Math.max(...boxes.map((b) => b.y + b.h))
+    const elements = slide.elements.map((el, i) => {
+      const b = boxes.find((box) => box.i === i)
+      if (!b) return el
+      let { x, y } = b
+      if (mode === 'left') x = minX
+      if (mode === 'center-x') x = minX + (maxX - minX) / 2 - b.w / 2
+      if (mode === 'right') x = maxX - b.w
+      if (mode === 'top') y = minY
+      if (mode === 'middle') y = minY + (maxY - minY) / 2 - b.h / 2
+      if (mode === 'bottom') y = maxY - b.h
+      return { ...el, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
+    })
+    updateSlide(slideIndex, { elements })
+  }
 
   return (
     <div className="relative flex flex-wrap items-center gap-1 px-3 py-2 rounded-xl border border-border bg-surface/80 backdrop-blur-md shadow-sm">
@@ -102,6 +137,24 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
       <button className={btnClass()} onClick={() => setImagePickerOpen(true)} title="Upload or pick an image">
         <ImagePlus size={14} />
         Image
+      </button>
+      <button
+        className={btnClass()}
+        title="Add a native chart (bar/line/pie…)"
+        onClick={() => {
+          insert({
+            type: 'chart',
+            chartType: 'bar',
+            labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+            datasets: [{ label: 'Series 1', data: [12, 19, 8, 15] }],
+            w: 45,
+            h: 42,
+          })
+          setChartEditorOpen(true)
+        }}
+      >
+        <BarChart3 size={14} />
+        Chart
       </button>
       <button className={btnClass()} onClick={() => setMediaPicker('video')} title="Upload a video (mp4/webm)">
         <Video size={14} />
@@ -276,10 +329,56 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
               const elements = slide.elements.filter((_, i) => i !== idx)
               elements.push(el)
               updateSlide(slideIndex, { elements })
+              editor.setSelection({ slideIndex, elementIndex: elements.length - 1 })
             }}
           >
             <ArrowUpToLine size={14} />
           </button>
+          <button
+            className={btnClass()}
+            title="Send to back"
+            onClick={() => {
+              const idx = selectedIdx
+              const el = slide.elements[idx]
+              const elements = slide.elements.filter((_, i) => i !== idx)
+              elements.unshift(el)
+              updateSlide(slideIndex, { elements })
+              editor.setSelection({ slideIndex, elementIndex: 0 })
+            }}
+          >
+            <ArrowDownToLine size={14} />
+          </button>
+          <button
+            className={btnClass(!!selectedElement.locked)}
+            title={selectedElement.locked ? 'Unlock element' : 'Lock element (no move/resize/delete)'}
+            onClick={() => updateElement(slideIndex, selectedIdx, { locked: !selectedElement.locked })}
+          >
+            {selectedElement.locked ? <Lock size={14} /> : <LockOpen size={14} />}
+          </button>
+          {multiCount > 1 && (
+            <>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent px-1">
+                {multiCount} selected
+              </span>
+              {([
+                ['left', AlignStartVertical],
+                ['center-x', AlignCenterVertical],
+                ['right', AlignEndVertical],
+                ['top', AlignStartHorizontal],
+                ['middle', AlignCenterHorizontal],
+                ['bottom', AlignEndHorizontal],
+              ] as const).map(([mode, Icon]) => (
+                <button
+                  key={mode}
+                  className={btnClass()}
+                  title={`Align ${mode}`}
+                  onClick={() => alignSelected(mode)}
+                >
+                  <Icon size={14} />
+                </button>
+              ))}
+            </>
+          )}
           {selectedElement.type === 'image' && (
             <>
               <button
@@ -316,10 +415,21 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
               Data
             </button>
           )}
+          {selectedElement.type === 'chart' && (
+            <button
+              className={btnClass(chartEditorOpen)}
+              title="Edit chart data"
+              onClick={() => setChartEditorOpen((v) => !v)}
+            >
+              <Table2 size={14} />
+              Data
+            </button>
+          )}
           <button
-            className="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-            title="Delete element"
-            onClick={() => deleteElement(slideIndex, selectedIdx)}
+            className="flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={selectedElement.locked ? 'Locked — unlock first' : 'Delete element'}
+            disabled={!!selectedElement.locked}
+            onClick={() => editor.deleteSelection()}
           >
             <Trash2 size={14} />
           </button>
@@ -403,6 +513,110 @@ export default function CanvasToolbar({ slideIndex }: { slideIndex: number }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+      {chartEditorOpen && selectedElement && selectedElement.type === 'chart' && selectedIdx != null && (
+        <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-40 w-[min(460px,90vw)] rounded-xl border border-border bg-surface shadow-xl shadow-black/30 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-text">Chart data</span>
+              <select
+                value={selectedElement.chartType ?? 'bar'}
+                onChange={(e) =>
+                  updateElement(slideIndex, selectedIdx, { chartType: e.target.value as SpecElement['chartType'] })
+                }
+                className="h-7 px-1.5 rounded-lg border border-border bg-bg text-xs text-text cursor-pointer"
+              >
+                {(['bar', 'line', 'pie', 'doughnut', 'radar'] as const).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="text-xs text-accent cursor-pointer"
+              onClick={() =>
+                updateElement(slideIndex, selectedIdx, {
+                  datasets: [
+                    ...(selectedElement.datasets ?? []),
+                    { label: `Series ${(selectedElement.datasets?.length ?? 0) + 1}`, data: (selectedElement.labels ?? []).map(() => 0) },
+                  ],
+                })
+              }
+            >
+              + series
+            </button>
+          </div>
+          <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-dim">
+              <span className="w-16">Value</span>
+              <span className="flex-1">Category label</span>
+            </div>
+            {(selectedElement.labels ?? []).map((label, ri) => (
+              <div key={ri} className="flex items-center gap-1.5">
+                <div className="flex flex-col gap-1 w-16">
+                  {(selectedElement.datasets ?? []).map((ds, di) => (
+                    <input
+                      key={di}
+                      value={ds.data?.[ri] ?? 0}
+                      type="number"
+                      onChange={(e) => {
+                        const datasets = (selectedElement.datasets ?? []).map((d, k) => {
+                          if (k !== di) return d
+                          const data = [...(d.data ?? [])]
+                          while (data.length < (selectedElement.labels?.length ?? 0)) data.push(0)
+                          data[ri] = Number(e.target.value)
+                          return { ...d, data }
+                        })
+                        updateElement(slideIndex, selectedIdx, { datasets })
+                      }}
+                      className="w-16 h-7 px-1.5 rounded-lg border border-border bg-bg text-xs text-text"
+                    />
+                  ))}
+                </div>
+                <input
+                  value={label}
+                  placeholder={`Label ${ri + 1}`}
+                  onChange={(e) => {
+                    const labels = [...(selectedElement.labels ?? [])]
+                    labels[ri] = e.target.value
+                    const datasets = (selectedElement.datasets ?? []).map((d) => ({
+                      ...d,
+                      // Keep series lengths in sync with the label count.
+                      data: (d.data ?? []).length > labels.length
+                        ? (d.data ?? []).slice(0, labels.length)
+                        : [...(d.data ?? []), ...Array(labels.length - (d.data ?? []).length).fill(0)],
+                    }))
+                    updateElement(slideIndex, selectedIdx, { labels, datasets })
+                  }}
+                  className="flex-1 h-7 px-1.5 rounded-lg border border-border bg-bg text-xs text-text"
+                />
+                <button
+                  className="text-xs text-red-400 px-1 cursor-pointer"
+                  title="Remove category"
+                  onClick={() => {
+                    const labels = (selectedElement.labels ?? []).filter((_, k) => k !== ri)
+                    const datasets = (selectedElement.datasets ?? []).map((d) => ({
+                      ...d,
+                      data: (d.data ?? []).filter((_, k) => k !== ri),
+                    }))
+                    updateElement(slideIndex, selectedIdx, { labels, datasets })
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="mt-2 text-xs text-accent cursor-pointer"
+            onClick={() => {
+              const labels = [...(selectedElement.labels ?? []), `Item ${(selectedElement.labels?.length ?? 0) + 1}`]
+              const datasets = (selectedElement.datasets ?? []).map((d) => ({ ...d, data: [...(d.data ?? []), 0] }))
+              updateElement(slideIndex, selectedIdx, { labels, datasets })
+            }}
+          >
+            + row
+          </button>
         </div>
       )}
       {libraryOpen && (

@@ -53,6 +53,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* --- Dark mode --- */
+/* Every Tailwind utility in the app (bg-surface, text-text-muted, …) reads
+   these variables, so overriding them under html.dark re-skins the whole UI.
+   The deck canvas keeps its OWN deck theme (deck themes are independent). */
+html.dark {
+  color-scheme: dark;
+  --color-bg: #131016;
+  --color-surface: #1b181f;
+  --color-surface2: #221e28;
+  --color-surface3: #2a2531;
+  --color-border: #35303d;
+  --color-border-active: #4a4456;
+  --color-text: #f4f1ee;
+  --color-text-muted: #aaa39c;
+  --color-text-dim: #7c756d;
+  --color-accent: #f97316;
+  --color-accent2: #fbbf24;
+  --color-accent-soft: #431f0c;
+  --color-accent2-soft: #452606;
+  --color-scrollbar: #3a3542;
+  --color-scrollbar-hover: #55505f;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

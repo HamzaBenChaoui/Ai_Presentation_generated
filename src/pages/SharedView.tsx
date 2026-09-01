@@ -213,7 +213,7 @@ export default function SharedView({ token, password: initialPassword }: Props) 
   if (!slide) return null
 
   return (
-    <DeckThemeProvider initial={(spec.meta?.theme as ThemeName) || 'modern'}>
+    <DeckThemeProvider initial={(spec.meta?.theme as ThemeName) || 'modern'} tokenOverrides={spec.meta?.themeTokens ?? null}>
       <div style={{ minHeight: '100vh', backgroundColor: colors.surface, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', borderBottom: `1px solid ${colors.border}` }}>
           <span style={{ fontSize: '13px', fontWeight: 700, color: colors.text }}>{title}</span>

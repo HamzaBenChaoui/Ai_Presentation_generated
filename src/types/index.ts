@@ -108,7 +108,13 @@ export type ElementType =
   | 'title' | 'subtitle' | 'paragraph' | 'bullets' | 'image' | 'video' | 'audio'
   | 'shape'
   | 'cards' | 'timeline' | 'comparison' | 'quote' | 'statistics'
-  | 'code' | 'table' | 'diagram' | 'icon'
+  | 'code' | 'table' | 'diagram' | 'icon' | 'chart'
+
+// One data series of a chart element.
+export interface ChartDataset {
+  label: string
+  data: number[]
+}
 
 // Optional per-element style overrides (structured layouts). Anything unset
 // inherits from the theme tokens.
@@ -164,6 +170,12 @@ export interface SpecElement {
   name?: string
   left?: Record<string, any>
   right?: Record<string, any>
+  // Chart element.
+  chartType?: 'bar' | 'line' | 'pie' | 'doughnut' | 'radar'
+  labels?: string[]
+  datasets?: ChartDataset[]
+  // Editing lock — a locked element can't be moved/resized/deleted.
+  locked?: boolean
 }
 
 export interface SlideSpec {
@@ -202,6 +214,8 @@ export interface PresentationMeta {
   language: string
   tone: string
   customAnimations?: CustomAnimationDef[] | null
+  /** Full renderer token set for a user-saved theme (carried by the deck). */
+  themeTokens?: Record<string, any> | null
 }
 
 export interface PresentationSpec {

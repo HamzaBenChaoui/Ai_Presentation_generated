@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Copy, X, Link2, Lock, Globe, Key } from 'lucide-react'
+import { Copy, X, Link2, Lock, Globe, Key, Timer, Code2 } from 'lucide-react'
 import { sharesApi, type ShareInfo, type CreateShareRequest } from '../lib/api'
 import { Button } from './ui/Button'
 import { Spinner } from './ui/Spinner'
@@ -17,6 +17,14 @@ const VISIBILITY_OPTIONS: { value: 'public' | 'private' | 'password'; label: str
   { value: 'private', label: 'Private', icon: Key, hint: 'Hidden from public access' },
 ]
 
+// Link lifetime choices (hours; 0 = never expires).
+const EXPIRY_OPTIONS: { value: number; label: string }[] = [
+  { value: 0, label: 'Never' },
+  { value: 24, label: '24 h' },
+  { value: 24 * 7, label: '7 days' },
+  { value: 24 * 30, label: '30 days' },
+]
+
 export default function ShareModal({ open, onClose, presentationId }: ShareModalProps) {
   const { toast } = useToast()
   const [shares, setShares] = useState<ShareInfo[]>([])
@@ -27,6 +35,8 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
   const [visibility, setVisibility] = useState<'public' | 'private' | 'password'>('public')
   const [password, setPassword] = useState('')
   const [permission, setPermission] = useState<'view' | 'present'>('view')
+  const [expiryHours, setExpiryHours] = useState(0)
+  const [embedFor, setEmbedFor] = useState<string | null>(null)
 
   const loadShares = useCallback(async () => {
     try {
@@ -53,6 +63,9 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
     try {
       const req: CreateShareRequest = { visibility, permission }
       if (visibility === 'password') req.password = password
+      if (expiryHours > 0) {
+        req.expires_at = new Date(Date.now() + expiryHours * 3_600_000).toISOString()
+      }
       await sharesApi.create(presentationId, req)
       await loadShares()
       // Reset form
@@ -161,6 +174,29 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
             </div>
           </div>
 
+          <div>
+            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider flex items-center gap-1">
+              <Timer size={11} />
+              Link expiry
+            </label>
+            <div className="grid grid-cols-4 gap-2 mt-1.5">
+              {EXPIRY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setExpiryHours(opt.value)}
+                  className={`px-2 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                    expiryHours === opt.value
+                      ? 'border-accent bg-accent/10 text-text'
+                      : 'border-border text-text-dim hover:text-text hover:border-accent/40'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Button
             variant="primary"
             size="sm"
@@ -205,6 +241,14 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
                     </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Embed code"
+                      onClick={() => setEmbedFor(embedFor === share.token ? null : share.token)}
+                    >
+                      <Code2 size={14} />
+                    </Button>
                     <Button variant="ghost" size="icon" title="Copy link" onClick={() => handleCopy(share.token)}>
                       <Copy size={14} />
                     </Button>
@@ -218,7 +262,44 @@ export default function ShareModal({ open, onClose, presentationId }: ShareModal
                   {share.comments && share.comments.length > 0 && (
                     <span title="Reviewer comments">💬 {share.comments.length}</span>
                   )}
+                  {share.expires_at && (
+                    <span
+                      className={new Date(share.expires_at) < new Date() ? 'text-red-400' : ''}
+                      title="Link expiry"
+                    >
+                      <Timer size={10} className="inline mr-0.5 -mt-0.5" />
+                      {new Date(share.expires_at) < new Date()
+                        ? 'expired'
+                        : `expires ${new Date(share.expires_at).toLocaleDateString()}`}
+                    </span>
+                  )}
                 </div>
+                {embedFor === share.token && (
+                  <div className="mt-2 border-t border-border pt-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-dim mb-1">
+                      Embed in any website
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <code className="flex-1 text-[10px] leading-relaxed bg-bg rounded-lg p-2 break-all text-text-muted select-all">
+                        {`<iframe src="${window.location.origin}/shared/${share.token}" width="960" height="540" frameborder="0" allowfullscreen></iframe>`}
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Copy embed code"
+                        onClick={() =>
+                          navigator.clipboard
+                            .writeText(
+                              `<iframe src="${window.location.origin}/shared/${share.token}" width="960" height="540" frameborder="0" allowfullscreen></iframe>`,
+                            )
+                            .then(() => toast.success('Embed code copied'), () => toast.error('Failed to copy'))
+                        }
+                      >
+                        <Copy size={13} />
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {share.slide_time_json && Object.keys(share.slide_time_json).length > 0 && (
                   <div className="mt-2">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-dim mb-1">

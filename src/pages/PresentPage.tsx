@@ -45,7 +45,7 @@ export default function PresentPage() {
   }
 
   return (
-    <DeckThemeProvider initial={spec.meta?.theme as ThemeName | null}>
+    <DeckThemeProvider initial={spec.meta?.theme as ThemeName | null} tokenOverrides={spec.meta?.themeTokens ?? null}>
       <FullscreenPlayer spec={spec} onExit={handleExit} />
     </DeckThemeProvider>
   )

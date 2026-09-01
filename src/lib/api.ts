@@ -225,11 +225,17 @@ export interface GenerateRequest {
   template_name?: string | null;
   // Model selected on the settings page. Undefined/null → backend default.
   model?: string | null;
+  // Approved outline (outline-first flow) — the deck follows it exactly.
+  outline?: { title: string; points?: string[] }[] | null;
 }
 
 export const generationApi = {
   generate(req: GenerateRequest) {
     return request<Presentation>("POST", "/presentations/generate", req);
+  },
+  /** Outline-first flow: get a reviewable slide plan without generating. */
+  outline(req: { prompt: string; slide_count: number; language?: string; tone?: string; model?: string | null }) {
+    return request<{ outline: { title: string; points: string[] }[] }>("POST", "/presentations/outline", req);
   },
 };
 
@@ -303,6 +309,12 @@ export const importApi = {
   run(req: ImportRequest) {
     return request<Presentation>("POST", "/presentations/import", req);
   },
+  /** Import an existing .pptx file into an editable deck (no AI rewriting). */
+  importPptx(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return uploadRequest<Presentation>("/presentations/import/pptx", form);
+  },
 };
 
 export const specApi = {
@@ -358,6 +370,38 @@ export interface SpecEditRequest {
 export const aiEditApi = {
   run(id: string, req: SpecEditRequest) {
     return request<SpecEditResponse>("POST", `/presentations/${id}/edit`, req);
+  },
+};
+
+/** Translate every text in the deck (one model call). */
+export const translateApi = {
+  run(id: string, targetLanguage: string, model?: string | null) {
+    return request<PresentationSpec>("POST", `/presentations/${id}/translate`, {
+      target_language: targetLanguage,
+      model: model ?? null,
+    });
+  },
+};
+
+// --- User-saved custom themes -------------------------------------------------
+
+export interface UserTheme {
+  id: string;
+  name: string;
+  tokens: Record<string, any>;
+  ambient?: Record<string, any> | null;
+  created_at?: string | null;
+}
+
+export const themesApi = {
+  list() {
+    return request<{ themes: UserTheme[] }>("GET", "/themes");
+  },
+  create(name: string, tokens: Record<string, any>, ambient?: Record<string, any> | null) {
+    return request<UserTheme>("POST", "/themes", { name, tokens, ambient: ambient ?? null });
+  },
+  remove(id: string) {
+    return request<void>("DELETE", `/themes/${id}`);
   },
 };
 

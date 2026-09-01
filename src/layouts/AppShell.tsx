@@ -11,9 +11,12 @@ import {
   Settings,
   Cable,
   Sparkles,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import { cn } from '../lib/cn'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 
 const SIDEBAR_KEY = 'slideai.sidebar'
 
@@ -42,6 +45,7 @@ function getInitialCollapsed(): boolean {
 
 export default function AppShell() {
   const { user, signOut } = useAuth()
+  const { resolved, toggle: toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -122,6 +126,17 @@ export default function AppShell() {
 
         {/* Bottom section */}
         <div className="border-t border-border p-2 space-y-1">
+          <button
+            onClick={toggleTheme}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-text-muted hover:bg-surface2 hover:text-text transition-colors cursor-pointer',
+              collapsed && 'justify-center px-0',
+            )}
+            title={resolved === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {resolved === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            {!collapsed && <span>{resolved === 'dark' ? 'Light mode' : 'Dark mode'}</span>}
+          </button>
           <button
             onClick={handleSignOut}
             className={cn(
@@ -226,6 +241,13 @@ export default function AppShell() {
                     <span className="truncate text-sm text-text-muted">{user.email}</span>
                   </div>
                 )}
+                <button
+                  onClick={toggleTheme}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-surface2 hover:text-text transition-colors cursor-pointer"
+                >
+                  {resolved === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                  <span>{resolved === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+                </button>
                 <button
                   onClick={handleSignOut}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-surface2 hover:text-text transition-colors cursor-pointer"

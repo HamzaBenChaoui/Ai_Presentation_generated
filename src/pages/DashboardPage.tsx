@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Copy,
   ExternalLink,
   Presentation as PresentationIcon,
   Upload,
@@ -16,12 +17,15 @@ import {
   FilePlus2,
   Search,
   FileDown,
+  BarChart3,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Spinner } from '../components/ui/Spinner'
 import ThemePickerModal from '../components/theme/ThemePickerModal'
+import OnboardingTour from '../components/OnboardingTour'
+import CommandPalette, { type Command } from '../components/editor/CommandPalette'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
@@ -202,7 +206,8 @@ export default function DashboardPage() {
   const [deckQuery, setDeckQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [importSource, setImportSource] = useState<'markdown' | 'url'>('markdown')
+  const [importSource, setImportSource] = useState<'markdown' | 'url' | 'pptx'>('markdown')
+  const [pptxFile, setPptxFile] = useState<File | null>(null)
   const [importContent, setImportContent] = useState('')
   const [importUrl, setImportUrl] = useState('')
   const [importing, setImporting] = useState(false)
@@ -290,6 +295,17 @@ export default function DashboardPage() {
     }
     setImporting(true)
     try {
+      if (importSource === 'pptx') {
+        if (!pptxFile) {
+          toast.error('Choose a .pptx file first.')
+          setImporting(false)
+          return
+        }
+        const created = await importApi.importPptx(pptxFile)
+        toast.success('PowerPoint imported into an editable deck.')
+        navigate(`/editor/${created.id}`)
+        return
+      }
       const created = await importApi.run({
         source: importSource,
         content: importSource === 'markdown' ? trimmed : null,
@@ -386,10 +402,23 @@ export default function DashboardPage() {
 
   const firstName = (user?.display_name || user?.email || '').split(/[\s@]/)[0]
 
+  // Ctrl+K palette on the dashboard (listens for its own Ctrl+K binding).
+  const dashboardCommands: Command[] = [
+    { id: 'generate', label: 'Generate a deck from the prompt below', run: () => handleGenerate() },
+    { id: 'blank', label: 'Create a blank deck', run: () => { void handleCreateBlank() } },
+    { id: 'import', label: 'Import markdown, URL or PowerPoint…', run: () => setImportOpen(true) },
+    { id: 'templates', label: 'Browse templates', run: () => navigate('/templates') },
+    { id: 'assets', label: 'Browse assets', run: () => navigate('/assets') },
+    { id: 'settings', label: 'Open settings', run: () => navigate('/settings') },
+    { id: 'mcp', label: 'Connect AI tools (MCP)', run: () => navigate('/mcp') },
+  ]
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="relative flex flex-col gap-8 pb-12">
+      <OnboardingTour />
+      <CommandPalette commands={dashboardCommands} listenKey />
       {/* Aurora background (page-level, subtil) */}
       <div className="pointer-events-none absolute -top-32 -right-24 h-96 w-96 rounded-full bg-accent/15 blur-[110px] animate-aurora-1" />
       <div className="pointer-events-none absolute top-40 -left-24 h-80 w-80 rounded-full bg-accent2/15 blur-[110px] animate-aurora-2" />
@@ -663,6 +692,28 @@ export default function DashboardPage() {
                                   <ExternalLink size={16} />
                                 </button>
                                 <button
+                                  className="rounded-lg bg-white/90 p-2 text-text hover:bg-white transition-colors cursor-pointer"
+                                  title="Analytics"
+                                  onClick={() => navigate(`/analytics/${deck.id}`)}
+                                >
+                                  <BarChart3 size={16} />
+                                </button>
+                                <button
+                                  className="rounded-lg bg-white/90 p-2 text-text hover:bg-white transition-colors cursor-pointer"
+                                  title="Duplicate"
+                                  onClick={async () => {
+                                    try {
+                                      await presentationsApi.duplicate(deck.id)
+                                      toast.success('Presentation duplicated')
+                                      loadPresentations()
+                                    } catch (err) {
+                                      if (err instanceof ApiClientError) toast.error(err.message)
+                                    }
+                                  }}
+                                >
+                                  <Copy size={16} />
+                                </button>
+                                <button
                                   className="rounded-lg bg-white/90 p-2 text-danger hover:bg-white transition-colors cursor-pointer"
                                   title="Delete"
                                   onClick={() => setPendingDelete(deck)}
@@ -801,7 +852,7 @@ export default function DashboardPage() {
               Paste markdown (or fetch a web page) — Slide AI structures a deck around your content.
             </p>
             <div className="flex gap-1.5 mb-3">
-              {(['markdown', 'url'] as const).map((src) => (
+              {(['markdown', 'url', 'pptx'] as const).map((src) => (
                 <button
                   key={src}
                   onClick={() => setImportSource(src)}
@@ -811,7 +862,7 @@ export default function DashboardPage() {
                       : 'border-border text-text-dim hover:text-text'
                   }`}
                 >
-                  {src === 'markdown' ? 'Markdown' : 'Web page URL'}
+                  {src === 'markdown' ? 'Markdown' : src === 'url' ? 'Web page URL' : 'PowerPoint'}
                 </button>
               ))}
             </div>
@@ -822,13 +873,29 @@ export default function DashboardPage() {
                 placeholder="Paste your markdown here…"
                 className="w-full min-h-[180px] rounded-xl border border-border bg-bg p-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent"
               />
-            ) : (
+            ) : importSource === 'url' ? (
               <input
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
                 placeholder="https://example.com/article"
                 className="w-full h-10 rounded-xl border border-border bg-bg px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent"
               />
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 min-h-[180px] rounded-xl border border-dashed border-border hover:border-accent/50 cursor-pointer transition-colors">
+                <FileText size={28} className="text-text-dim" />
+                <span className="text-sm text-text-muted">
+                  {pptxFile?.name || 'Choose a .pptx file (max 20 MB)'}
+                </span>
+                <span className="text-xs text-text-dim">
+                  Text, tables and charts become editable elements — no AI rewriting.
+                </span>
+                <input
+                  type="file"
+                  accept=".pptx"
+                  className="hidden"
+                  onChange={(e) => setPptxFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
             )}
             <div className="flex justify-end gap-2 mt-4">
               <button

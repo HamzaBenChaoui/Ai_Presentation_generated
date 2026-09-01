@@ -9,6 +9,7 @@ import EditableText from '../editor/EditableText'
 import ImagePickerModal from '../editor/ImagePickerModal'
 import { useResolvedImageSrc } from '../../lib/imageUrls'
 import { Image as ImageIcon } from 'lucide-react'
+import DataChartView from './DataChartView'
 
 /** Simple context to pass the current slide index down to ElementRenderer. */
 const ActiveSlideIndex = createContext(0)
@@ -51,6 +52,10 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
     ? {
         onClick: (e: React.MouseEvent) => {
           e.stopPropagation()
+          if (e.shiftKey) {
+            editorCtx.toggleMultiSelect(slideIndex, realIndex)
+            return
+          }
           editorCtx.setSelection({ slideIndex, elementIndex: realIndex })
         },
       }
@@ -293,6 +298,26 @@ export default function ElementRenderer({ el, tokens = defaultTokens, index = 0 
       return (
         <span key={key} {...animProps} title={el.label || el.name} style={{ fontSize: '28px' }}>{iconFor(el.name)}</span>
       )
+    case 'chart': {
+      // Native data chart element. In free placement the wrapper fills the
+      // box (h set by the author); in flow a sane default height applies.
+      return (
+        <div
+          key={key}
+          {...animProps}
+          {...selectProps}
+          style={{ width: '100%', height: el.h ? '100%' : 240, minHeight: 160, ...styleOverrides, ...selectionOutline }}
+        >
+          <DataChartView
+            chartType={el.chartType}
+            labels={el.labels}
+            datasets={el.datasets}
+            tokens={tokens}
+            active={activeSlideActive}
+          />
+        </div>
+      )
+    }
     case 'video': {
       const vidSrc = resolvedSrc
       return (

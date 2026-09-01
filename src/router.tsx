@@ -30,6 +30,7 @@ import TemplatesPage from './pages/TemplatesPage'
 import AssetsPage from './pages/AssetsPage'
 import SettingsPage from './pages/SettingsPage'
 import McpPage from './pages/McpPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 
 /* ------------------------------------------------------------------ */
 /*  Auth guard                                                         */
@@ -124,6 +125,7 @@ export const router = createBrowserRouter([
         children: [
           { path: 'editor/:id', element: <EditorPage /> },
           { path: 'present/:id', element: <PresentPage /> },
+          { path: 'analytics/:id', element: <AnalyticsPage /> },
         ],
       },
     ],
