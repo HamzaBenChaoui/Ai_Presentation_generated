@@ -373,13 +373,26 @@ export const aiEditApi = {
   },
 };
 
-/** Translate every text in the deck (one model call). */
+/** Translate every text in the deck (one model call). Returns the fresh
+ * updated_at so the editor can adopt the new optimistic-locking baseline —
+ * the translate endpoint rewrites the row server-side. */
 export const translateApi = {
-  run(id: string, targetLanguage: string, model?: string | null) {
-    return request<PresentationSpec>("POST", `/presentations/${id}/translate`, {
-      target_language: targetLanguage,
-      model: model ?? null,
+  async run(id: string, targetLanguage: string, model?: string | null): Promise<{ spec: PresentationSpec; updatedAt: string | null }> {
+    const authToken = getAccessToken();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+    const res = await fetch(`${API_BASE}/presentations/${id}/translate`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ target_language: targetLanguage, model: model ?? null }),
     });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const err = (data ?? {}) as ApiError;
+      throw new ApiClientError(res.status, err.error ?? "unknown_error", err.message ?? res.statusText, err.detail);
+    }
+    return { spec: data as PresentationSpec, updatedAt: res.headers.get("X-Updated-At") };
   },
 };
 

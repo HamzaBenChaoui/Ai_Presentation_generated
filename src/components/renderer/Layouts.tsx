@@ -405,9 +405,19 @@ export function CTA({ slide, tokens = defaultTokens }: LayoutProps) {
     <div style={{ ...stack(), alignItems: 'center', textAlign: 'center', justifyContent: 'center', height: '100%', gap: '24px' }}>
       {(e.title || []).map((el, i) => <El key={i} el={el} tokens={tokens} index={i} />)}
       {(e.subtitle || []).map((el, i) => <El key={`s${i}`} el={el} tokens={tokens} index={i + 1} />)}
-      <button style={{ padding: '14px 34px', borderRadius: '40px', border: 'none', background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`, color: '#fff', fontWeight: 700, fontSize: '16px', cursor: 'pointer', boxShadow: `0 10px 30px ${tokens.accent}66` }}>
+      {/* span, not button: the slide thumbnail wraps every layout in a real
+          <button>, and nested buttons are invalid HTML (React warning). */}
+      <span
+        style={{
+          display: 'inline-block',
+          padding: '14px 34px', borderRadius: '40px',
+          background: `linear-gradient(135deg, ${tokens.accent}, ${tokens.accent2})`,
+          color: '#fff', fontWeight: 700, fontSize: '16px',
+          boxShadow: `0 10px 30px ${tokens.accent}66`,
+        }}
+      >
         {(e.paragraph?.[0]?.text) || 'Get started'}
-      </button>
+      </span>
     </div>
   )
 }

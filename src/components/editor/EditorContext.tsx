@@ -73,6 +73,13 @@ interface EditorContextValue {
 
   // AI edit
   applyAiEdit: (newSpec: PresentationSpec) => void
+  /**
+   * Adopt a spec that the SERVER has already persisted (translate, AI edit…
+   * any endpoint that rewrites the row). Pushes an undo entry, marks the spec
+   * clean and re-bases optimistic locking on the fresh updated_at — without
+   * this the next autosave 409s because its baseline predates the write.
+   */
+  adoptServerSpec: (spec: PresentationSpec, updatedAt: string | null) => void
 
   // Persistence
   load: (presentationId: string) => Promise<void>
@@ -499,6 +506,20 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
     scheduleSave()
   }, [spec, pushHistory, scheduleSave, bump])
 
+  const adoptServerSpec = useCallback((newSpec: PresentationSpec, updatedAt: string | null) => {
+    if (!spec) return
+    if (specHash(spec) !== specHash(newSpec)) {
+      pushHistory(spec, 'server update')
+    }
+    setSpec(newSpec)
+    // The server already persisted exactly this spec: adopt it as the saved
+    // state and re-base optimistic locking on the fresh updated_at.
+    savedHashRef.current = specHash(newSpec)
+    if (updatedAt) updatedAtRef.current = updatedAt
+    setIsDirty(false)
+    bump()
+  }, [spec, pushHistory, bump])
+
   const value: EditorContextValue = {
     spec, isDirty, isSaving, saveError,
     canUndo: history.length > 0,
@@ -510,6 +531,7 @@ export function EditorProvider({ children, presentationId, initialSpec, initialU
     deleteSlide, duplicateSlide, addSlide, updateElementText,
     undo, redo, copy, paste, setSelection, applyAiEdit,
     toggleMultiSelect, selectedIndexes, deleteSelection,
+    adoptServerSpec,
     load, forceSave, conflict, overwriteConflictSave,
   }
 

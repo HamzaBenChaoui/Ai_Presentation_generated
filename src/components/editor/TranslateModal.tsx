@@ -30,8 +30,14 @@ export default function TranslateModal({ presentationId, open, onClose }: Props)
     setBusy(true)
     setError(null)
     try {
-      const translated = await translateApi.run(presentationId, target)
-      editor.applyAiEdit(translated)
+      // 1. Flush pending local edits first so the server state and our
+      //    optimistic-locking baseline match before the endpoint rewrites.
+      await editor.forceSave()
+      // 2. Translate server-side (one model call).
+      const { spec: translated, updatedAt } = await translateApi.run(presentationId, target)
+      // 3. Adopt the persisted spec with its fresh updated_at — no 409 on the
+      //    next autosave, full undo available.
+      editor.adoptServerSpec(translated, updatedAt)
       onClose()
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'Translation failed')
