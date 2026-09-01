@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sparkles, PenTool, Presentation, Cable, ArrowRight, Check } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
@@ -16,10 +16,16 @@ export function hasSeenOnboarding(): boolean {
   }
 }
 
+// Shared dismissal signal: the AppShell renders the page tree twice (mobile +
+// desktop outlets), so the tour mounts as TWO stacked instances. Dismissing
+// must hide BOTH, not just the one that received the click.
+const subs = new Set<() => void>()
+
 export function dismissOnboarding() {
   try {
     localStorage.setItem(KEY, '1')
   } catch { /* ignore */ }
+  subs.forEach((fn) => fn())
 }
 
 const STEPS = [
@@ -52,6 +58,12 @@ const STEPS = [
 export default function OnboardingTour() {
   const [step, setStep] = useState(0)
   const [visible, setVisible] = useState(() => !hasSeenOnboarding())
+
+  useEffect(() => {
+    const hide = () => setVisible(false)
+    subs.add(hide)
+    return () => { subs.delete(hide) }
+  }, [])
 
   if (!visible) return null
 
