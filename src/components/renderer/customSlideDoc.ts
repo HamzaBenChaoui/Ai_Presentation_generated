@@ -87,6 +87,32 @@ ${html}
   });
 })();
 </script>
+<script>
+/* Compatibility shim, runs BEFORE the authored code. Free models often write
+   document.getElementsByTagName("canvas").getContext(...) — an HTMLCollection
+   has no getContext, and the slide used to die on a TypeError. Forward the
+   canvas methods to the collection's FIRST element so the intent works. */
+(function () {
+  function forward(method) {
+    return function () {
+      var first = this && this.length ? this[0] : null;
+      return first && typeof first[method] === 'function'
+        ? first[method].apply(first, arguments)
+        : undefined;
+    };
+  }
+  [window.HTMLCollection, window.NodeList].forEach(function (Ctor) {
+    if (!Ctor || !Ctor.prototype) return;
+    ['getContext', 'toDataURL'].forEach(function (m) {
+      if (!(m in Ctor.prototype)) {
+        try {
+          Object.defineProperty(Ctor.prototype, m, { value: forward(m), configurable: true });
+        } catch (e) { /* older engine — the hint fallback still applies */ }
+      }
+    });
+  });
+})();
+</script>
 ${libScripts}
 <script>
 (function () {
